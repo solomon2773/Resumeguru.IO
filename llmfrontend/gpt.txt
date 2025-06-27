@@ -1,0 +1,174 @@
+{
+    "jobDescription":{
+         "companyName": "Home Depot",
+            "jobTitle": "Software Engineer",
+            "keyResponsibilities": [
+            "Assists in developing, testing, deploying, and maintaining software",
+            "Follows best practices established by the organization and participates in improvement conversations",
+            "Consistently helps the team achieve results, even under tough circumstances"
+        ],
+            "requiredSkills": [
+            "Exposure to front end technology such as HTML, CSS, and Javascript/Typescript frameworks",
+            "Exposure to an object-oriented programming language (preferably Java)",
+            "Exposure to source code version control",
+            "Exposure to Relational or noSQL database technology",
+            "Exposure to cloud computing techniques",
+            "Exposure to CI/CD tools",
+            "Exposure to microservice-based architecture"
+        ],
+            "qualifications": [
+            "Must be eighteen years of age or older",
+            "Must be legally permitted to work in the United States"
+        ],
+    }
+
+    "professionalExperiences": [
+    {
+        "companyName": "",
+        "professionalExperienceTitle": "Software Engineer, ST TECHNOLOGY LLC",
+        "ProfessionalExperienceDescription": "",
+        "jobStartDate": "2015-03",
+        "jobEndDate": "",
+        "jobLocation": "",
+        "jobLocationType": "",
+        "currentlyWorkingHere": false,
+        "professionalExperienceDescription": "Successfully developed one product showing website and one e-commerce website which are based on Joomla/Magento platform with custom components and modules utilizing AJAX, JQuery, HTML, CSS, PHP, JavaScript and custom PHP library. The e-commerce website has ability to communicate with DHL, FedEx generating shipping label, processing credit card transactions via PayPal’s API or FirstData’s API in real-time, let member login via social media’s API and also be able to communicate with other website’s API system for order placing. \n Writing custom PHP scripts for data processing automation that use Linux’s Cron Jobs. By executing the custom automation scripts, web pages header title and header description will be updated daily with most recent user generated contents and/or public contents for website SEO. On the other hand, several data mining scripts also executed via Cron Jobs collecting and analyzing public consumer products data including but not limited to product’s SKU, UPC, ISBN, name, title, description, price. \n Successfully establish a half-rack(22U) small data center consist of 7 physical servers running CentOS, powered by Intel’s Xeon CPU, UPS system, SSD RAID system for optimal processing speed & redundancy and one backup server in a different physical location running custom daily data synchronization script. The cluster has one management/master routing server, one slave routing server, two master Apache web/file server, one master MySQL database server running two instances, one MySQL slave database server running two instances, one mail/data mining server. \n Developed custom web service API library, which can access MySQL database between different servers, exchanges JSON encode data. This library can be run with or without a pre-assigned API-key for public or private access control. "
+    },
+
+],
+
+}
+
+You are a resume-rewritten chatbot. Based on the provided {jobDescription} rewritten {professionalExperience} to highlight skills and experiences that align with the job position. Do not change {professionalExperienceTitle}, Focus on showcasing your {Key Responsibilities} as mentioned in the job description. Highlight any relevant experience or tasks that demonstrate your ability to {Key Responsibilities}. Keep the output of {professionalExperienceDescription} in the same format as the input {professionalExperienceDescription} format. No legal working status information in the return.
+The return needs to be in JSON format and only return the rewritten professional experience.
+Instructions:
+{professionalExperienceRewrite}: Array of objects, each object is one professional experience from a job.
+Each object has the following properties:
+{professionalExperienceTitle}: String,
+{professionalExperienceDescription}: String,
+{jobStartDate}: String,
+{jobEndDate}: String.
+
+{
+"jobDescription":"Position Purpose
+
+
+                  The Software Engineer is responsible for assisting in developing and designing a product that Home Depot customers and associates will love. As a Software Engineer, you will be part of a dynamic team with engineers of all experience levels who help each other build and grow technical and leadership skills while creating, deploying, and supporting production applications. In addition, Software Engineers may be involved in product configuration, security, resilience, performance tuning and production monitoring.
+
+
+                  Key Responsibilities
+
+
+                  60% Delivers and Executes - Assists in developing, testing, deploying, and maintaining software; Follows best practices established by the organization and participates in improvement conversations; Consistently helps the team achieve results, even under tough circumstances
+                  20% Learns and Grows - Learns through successful and failed experiment when tackling new problems; Actively seeks ways to grow and be challenged using both formal and informal development channels
+                  20% Plans and Aligns - Builds partnerships and works collaboratively with others to meet shared objectives; Collaborates with other team members in agile processes; Relates openly and comfortably with diverse groups of people
+                  Direct Manager/Direct Reports:
+
+
+                  This position typically reports to Software Engineer Manager or Sr. Manager
+                  This position has 0 Direct Reports
+                  Travel Requirements:
+
+
+                  No travel required.
+                  Physical Requirements:
+
+
+                  Most of the time is spent sitting in a comfortable position and there is frequent opportunity to move about. On rare occasions there may be a need to move or lift light articles.
+                  Working Conditions:
+
+
+                  Located in a comfortable indoor area. Any unpleasant conditions would be infrequent and not objectionable.
+
+
+                  Minimum Qualifications
+
+
+                  Must be eighteen years of age or older.
+                  Must be legally permitted to work in the United States.
+                  Preferred Qualifications:
+
+
+                  Exposure to front end technology such as HTML, CSS, and Javascript/Typescript frameworks
+                  Exposure to an object-oriented programming language (preferably Java)
+                  Exposure to source code version control
+                  Exposure to Relational or noSQL database technology
+                  Exposure to cloud computing techniques
+                  Exposure to CI/CD tools
+                  Exposure to microservice-based architecture
+                  Minimum Education:
+
+
+                  The knowledge, skills and abilities typically acquired through the completion of a bachelor's degree program or equivalent degree in a field of study related to the job.
+                  Preferred Education:
+
+
+                  No additional education
+                  Minimum Years of Work Experience:
+
+
+                  1
+                  Certifications:
+
+
+                  None
+                  Competencies:
+
+
+                  Global Perspective
+                  Manages Ambiguity
+                  Nimble Learning
+                  Self-Development
+                  Collaborates
+                  Cultivates Innovation
+                  Situational Adaptability
+                  Communicates Effectively
+                  Drives Results
+                  Interpersonal Savvy
+"
+"professionalExperiences": [
+    {
+        "companyName": "",
+        "professionalExperienceTitle": "Software Engineer, ST TECHNOLOGY LLC",
+        "ProfessionalExperienceDescription": "",
+        "jobStartDate": "2015-03",
+        "jobEndDate": "",
+        "jobLocation": "",
+        "jobLocationType": "",
+        "currentlyWorkingHere": false,
+        "professionalExperienceDescription": "Successfully developed one product showing website and one e-commerce website which are based on Joomla/Magento platform with custom components and modules utilizing AJAX, JQuery, HTML, CSS, PHP, JavaScript and custom PHP library. The e-commerce website has ability to communicate with DHL, FedEx generating shipping label, processing credit card transactions via PayPal’s API or FirstData’s API in real-time, let member login via social media’s API and also be able to communicate with other website’s API system for order placing. \n Writing custom PHP scripts for data processing automation that use Linux’s Cron Jobs. By executing the custom automation scripts, web pages header title and header description will be updated daily with most recent user generated contents and/or public contents for website SEO. On the other hand, several data mining scripts also executed via Cron Jobs collecting and analyzing public consumer products data including but not limited to product’s SKU, UPC, ISBN, name, title, description, price. \n Successfully establish a half-rack(22U) small data center consist of 7 physical servers running CentOS, powered by Intel’s Xeon CPU, UPS system, SSD RAID system for optimal processing speed & redundancy and one backup server in a different physical location running custom daily data synchronization script. The cluster has one management/master routing server, one slave routing server, two master Apache web/file server, one master MySQL database server running two instances, one MySQL slave database server running two instances, one mail/data mining server. \n Developed custom web service API library, which can access MySQL database between different servers, exchanges JSON encode data. This library can be run with or without a pre-assigned API-key for public or private access control. "
+    },
+
+],
+    "education": [
+    {
+        "degree": "Master's Degree",
+        "school": "University of Texas at Dallas",
+        "fieldOfStudy": "Software Engineering ",
+        "startDate": "2016-09",
+        "endDate": "2018-05",
+        "grade": "",
+        "activitiesAndSocieties": "",
+        "description": ""
+    },
+    {
+        "degree": "Bachelor's Degree",
+        "school": "Minghsin University of Science and Technology",
+        "fieldOfStudy": "Electrical Engineering",
+        "startDate": "",
+        "endDate": "2003-06",
+        "grade": "",
+        "activitiesAndSocieties": "",
+        "description": ""
+    }
+],
+}
+You are a resume-rewritten chatbot. Based on the provided {jobDescription} rewritten {professionalExperience} to highlight skills and experiences that align with the job position. Do not change {professionalExperienceTitle}, Focus on showcasing your {Key Responsibilities} as mentioned in the job description. Highlight any relevant experience or tasks that demonstrate your ability to {Key Responsibilities}. Keep the output of {professionalExperienceDescription} in the same format as the input {professionalExperienceDescription} format. No legal working status information in the return.
+The return needs to be in JSON format and only return the rewritten professional experience.
+Instructions:
+{professionalExperienceRewrite}: Array of objects, each object is one professional experience from a job.
+Each object has the following properties:
+{professionalExperienceTitle}: String,
+{professionalExperienceDescription}: String,
+{jobStartDate}: String,
+{jobEndDate}: String,

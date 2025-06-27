@@ -1,0 +1,23 @@
+<svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="microphone/on">
+<g clip-path="url(#clip0_164_82)">
+<rect width="50" height="50" rx="25" fill="url(#paint0_linear_164_82)" fill-opacity="0.8"/>
+<path id="Vector" d="M35.4166 22.9167C35.4166 28.6667 30.75 33.3334 25 33.3334C19.25 33.3334 14.5833 28.6667 14.5833 22.9167H10.4166C10.4166 30.2709 15.8541 36.3126 22.9166 37.3334V43.7501H27.0833V37.3334C34.1458 36.3126 39.5833 30.2709 39.5833 22.9167H35.4166Z" fill="white"/>
+<path id="Vector_2" d="M25 29.1667C28.4583 29.1667 31.25 26.3751 31.25 22.9167V10.4167C31.25 6.95841 28.4583 4.16675 25 4.16675C21.5417 4.16675 18.75 6.95841 18.75 10.4167V22.9167C18.75 26.3751 21.5417 29.1667 25 29.1667ZM22.9167 10.4167C22.9167 9.27091 23.8542 8.33341 25 8.33341C26.1458 8.33341 27.0833 9.27091 27.0833 10.4167V22.9167C27.0833 24.0626 26.1458 25.0001 25 25.0001C23.8542 25.0001 22.9167 24.0626 22.9167 22.9167V10.4167Z" fill="url(#paint1_linear_164_82)"/>
+<path id="Vector_3" d="M25 29.1667C28.4583 29.1667 31.25 26.3751 31.25 22.9167V10.4167C31.25 6.95841 28.4583 4.16675 25 4.16675C21.5417 4.16675 18.75 6.95841 18.75 10.4167V22.9167C18.75 26.3751 21.5417 29.1667 25 29.1667Z" fill="white"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_164_82" x1="25" y1="0" x2="25" y2="50" gradientUnits="userSpaceOnUse">
+<stop stop-color="#009695"/>
+<stop offset="1" stop-color="#032AF5" stop-opacity="0.8"/>
+</linearGradient>
+<linearGradient id="paint1_linear_164_82" x1="25" y1="4.16675" x2="25" y2="29.1667" gradientUnits="userSpaceOnUse">
+<stop stop-color="#009695"/>
+<stop offset="1" stop-color="#032AF5"/>
+</linearGradient>
+<clipPath id="clip0_164_82">
+<rect width="50" height="50" rx="25" fill="white"/>
+</clipPath>
+</defs>
+</svg>

@@ -1,0 +1,8 @@
+../node_modules
+node_modules
+.next
+
+
+# Sentry Config File
+.env.sentry-build-plugin
+!/src/X509-cert-8565173483800747719.pem

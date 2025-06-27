@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/*.instructionlist {*/
+/*    counter-reset: item;*/
+/*}*/
+/*.instructionlist li div::before {*/
+/*    content: counter(item);*/
+/*    color: #bdd6e6;*/
+/*    text-align: left;*/
+/*    min-width: 65px;*/
+/*    margin-right: 10px;*/
+/*    border-radius: 100%;*/
+/*    font-size: 50px;*/
+/*}*/
+
+/*.instructionlist li div{*/
+/*    counter-increment: item;*/
+/*}*/
+
+/*.socialmedia {*/
+/*    vertical-align: top;*/
+/*    display: inline-block;*/
+/*    margin-right: 10px;*/
+/*    text-align: center;*/
+/*  }*/
+
+.clip-bottom {
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  }
+
+  .clip-top {
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  }
