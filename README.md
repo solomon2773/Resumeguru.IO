@@ -1,7 +1,7 @@
 # ResumeGuru V4 - AI-Powered Resume Builder & Interview Assistant
 
 ResumeGuru is a comprehensive AI-powered platform that helps users create professional resumes, cover letters, and prepare for job interviews using advanced language models and AI technologies.
-
+Creater Solomon Tsao - LinkedIn - https://www.linkedin.com/in/solomon-tsao/
 ## 🚀 Features
 
 - **AI Resume Builder**: Generate professional resumes tailored to job descriptions
