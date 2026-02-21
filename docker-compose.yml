@@ -1,0 +1,109 @@
+###############################################################################
+# CareerOS - Docker Compose
+#
+# Auto-starts both frontend and backend.
+# Single user, local SQLite database, no external services required.
+#
+# Usage:
+#   docker compose up          # start both services
+#   docker compose up --build  # rebuild and start
+#   docker compose down        # stop
+#
+# GPU support:
+#   For NVIDIA GPU (DGX Spark / consumer):
+#     docker compose --profile gpu up
+#
+#   For CPU/Apple Silicon:
+#     docker compose up  (default, no GPU passthrough)
+###############################################################################
+
+services:
+  # ── Backend (FastAPI + LangGraph + PersonaPlex) ───────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: careeros-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG:-false}
+      - FRONTEND_URL=http://localhost:3000
+      - DATABASE_URL=sqlite:///./data/careeros.db
+      - NIM_API_BASE=${NIM_API_BASE:-http://localhost:8010}
+      - NIM_MODEL=${NIM_MODEL:-meta/llama-3.1-70b-instruct}
+      - NIM_API_KEY=${NIM_API_KEY:-}
+      - PERSONAPLEX_URL=${PERSONAPLEX_URL:-http://localhost:8020}
+      - RIVA_SPEECH_URL=${RIVA_SPEECH_URL:-localhost:50051}
+      - LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-./models/llama-3.2-3b-instruct.Q4_K_M.gguf}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+    volumes:
+      - careeros-data:/app/data
+      - ./models:/app/models:ro  # Mount local models directory
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── Frontend (Next.js Dashboard) ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: careeros-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── GPU-enabled backend (optional, use with --profile gpu) ───────────────
+  backend-gpu:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: careeros-backend-gpu
+    profiles: ["gpu"]
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG:-false}
+      - FRONTEND_URL=http://localhost:3000
+      - DATABASE_URL=sqlite:///./data/careeros.db
+      - NIM_API_BASE=${NIM_API_BASE:-http://localhost:8010}
+      - NIM_MODEL=${NIM_MODEL:-meta/llama-3.1-70b-instruct}
+      - NIM_API_KEY=${NIM_API_KEY:-}
+      - PERSONAPLEX_URL=${PERSONAPLEX_URL:-http://localhost:8020}
+      - RIVA_SPEECH_URL=${RIVA_SPEECH_URL:-localhost:50051}
+      - LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-./models/llama-3.2-3b-instruct.Q4_K_M.gguf}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - careeros-data:/app/data
+      - ./models:/app/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  careeros-data:
+    driver: local
