@@ -1,360 +1,151 @@
-# ResumeGuru V4 - AI-Powered Resume Builder & Interview Assistant
+# CareerOS - AI Career Assistant
 
-ResumeGuru is a comprehensive AI-powered platform that helps users create professional resumes, cover letters, and prepare for job interviews using advanced language models and AI technologies.
-Creater Solomon Tsao - LinkedIn - https://www.linkedin.com/in/solomon-tsao/
-## 🚀 Features
+Personal AI career assistant powered by LangGraph agents and NVIDIA PersonaPlex.
+Designed for a single user. No auth, no payments, no cloud dependencies.
 
-- **AI Resume Builder**: Generate professional resumes tailored to job descriptions
-- **Cover Letter Generator**: Create compelling cover letters with AI assistance
-- **Mock Interview Simulator**: Practice interviews with AI-powered Hannah
-- **JD Extractor**: Extract key information from job descriptions
-- **LinkedIn Connection Messages**: Generate professional connection requests
-- **Interview Q&A**: Get curated interview questions and AI-generated answers
-- **Job Search**: Natural language job search with recommendations
-- **Document Management**: Create, edit, download, and share documents
+Creator: Solomon Tsao - [LinkedIn](https://www.linkedin.com/in/solomon-tsao/)
 
-## 🏗️ Architecture
+## What It Does
 
-- **Frontend**: Next.js with React, Tailwind CSS
-- **Backend**: Python FastAPI with WebSocket support
-- **AI Services**: Azure OpenAI, OpenAI GPT models
-- **Database**: MongoDB Atlas
-- **Authentication**: Firebase Auth
-- **Storage**: Cloudflare R2
-- **Payments**: Stripe
-- **Speech Services**: Microsoft Azure Speech Services
+- **AI Chat** - Career advice, resume tips, cover letters, LinkedIn messages via LangGraph agents
+- **Resume Builder** - Create, edit, upload (PDF/DOCX), and AI-optimize resumes
+- **Mock Interview** - Practice with AI interviewer Hannah (voice + text)
+- **Job Tracker** - Save job descriptions, track application status, skill gap analysis
+- **Analytics** - Interview scores, application pipeline, progress tracking
 
-## 📋 Prerequisites
+All in one dashboard. All data stored locally in SQLite.
 
-- Node.js 18+ and npm/yarn
-- Python 3.8+
-- MongoDB Atlas account
-- Azure OpenAI account
-- Firebase project
-- Cloudflare R2 account
-- Stripe account
+## Architecture
 
-## 🔧 Quick Start
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 14, React 18, Tailwind CSS |
+| Backend | Python FastAPI, LangGraph agent orchestrator |
+| Database | SQLite (local, zero-config) |
+| AI Agents | LangGraph with supervisor routing pattern |
+| Avatar/Speech | NVIDIA PersonaPlex (GPU) or browser Web Speech API (fallback) |
+| LLM | NVIDIA NIM → local llama.cpp → OpenAI API (automatic fallback chain) |
 
-### Option 1: Automated Setup (Recommended)
+## GPU Support & Automatic Fallback
 
-Run the automated setup script that handles everything:
+CareerOS auto-detects your hardware and configures itself:
+
+| Hardware | LLM | Speech | Avatar |
+|----------|-----|--------|--------|
+| **2x NVIDIA DGX Spark GB10** | NIM (Llama 3.1 70B) | Riva ASR/TTS | PersonaPlex Audio2Face |
+| **NVIDIA GPU (16GB+ VRAM)** | NIM (Llama 3.1 8B+) | Riva ASR/TTS | PersonaPlex |
+| **NVIDIA GPU (<16GB VRAM)** | NIM (Llama 3.1 8B) | Browser Web Speech | None |
+| **Apple Silicon M3/M4/M5** | llama.cpp + Metal | Browser Web Speech | None |
+| **CPU only** | llama.cpp (slow) or OpenAI API | Browser Web Speech | None |
+
+## Quick Start
+
+### Docker (Recommended)
 
 ```bash
-git clone <repository-url>
-cd resumeguru_V4
-./scripts/quick-start.sh
+# Clone and start
+git clone <repo-url> && cd Resumeguru.IO
+cp .env.example .env  # edit if needed
+
+# CPU / Apple Silicon
+docker compose up --build
+
+# NVIDIA GPU (with GPU passthrough)
+docker compose --profile gpu up --build
 ```
 
-This script will:
-- Check prerequisites
-- Set up environment files
-- Install backend dependencies
-- Install frontend dependencies
-- Guide you through the next steps
+Frontend: http://localhost:3000
+Backend: http://localhost:8000
 
-### Option 2: Manual Setup
+### Manual Setup
 
-#### 1. Clone the Repository
+#### Backend
 
 ```bash
-git clone <repository-url>
-cd resumeguru_V4
-```
-
-#### 2. Environment Setup
-
-Run the automated setup script:
-
-```bash
-./scripts/setup-env.sh
-```
-
-This will create the necessary environment files from templates.
-
-#### 3. Backend Setup
-
-##### Install Python Dependencies
-
-```bash
-cd llmbackend
+cd backend
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env  # edit as needed
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-##### Configure Environment Variables
-
-Edit `llmbackend/.env` with your actual values:
+#### Frontend
 
 ```bash
-# WebSocket Authentication
-WEBSOCKET_AUTH_KEY=your-websocket-auth-key-here
-
-# MongoDB Configuration
-MONGODB_URI=mongodb+srv://your-cluster.mongodb.net/?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority&appName=your-app-name
-TLS_CERTIFICATE_KEY_FILE=./path/to/your/certificate.pem
-
-# Azure OpenAI Configuration
-AZURE_OPENAI_API_KEY=your-azure-openai-api-key-here
-AZURE_OPENAI_BASE_URL=https://your-resource.openai.azure.com/
-
-# Server Configuration
-HOST=0.0.0.0
-PORT=8000
-```
-
-##### Start the Backend Server
-
-```bash
-cd llmbackend
-python src/main.py
-```
-
-The backend will be available at `http://localhost:8000`
-
-#### 4. Frontend Setup
-
-##### Install Node.js Dependencies
-
-```bash
-cd llmfrontend
+cd frontend
 npm install
-# or
-yarn install
-```
-
-##### Configure Environment Variables
-
-Edit `llmfrontend/.env.local` with your actual values. See `llmfrontend/env.example` for all required variables.
-
-Key variables to configure:
-
-```bash
-# General Configuration
-DEV=true
-SKA_API_AUTH_TOKEN=your-ska-api-auth-token
-SITE_URL=https://localhost:3000
-
-# Firebase Configuration
-FIREBASE_PUBLIC_APIKEY=your-firebase-api-key
-FIREBASE_PUBLIC_AUTHDOMAIN=your-project.firebaseapp.com
-FIREBASE_PUBLIC_PROJECTID=your-project-id
-
-# Azure OpenAI Configuration
-MICROSOFT_OPENAI_API_KEY=your-microsoft-openai-api-key
-MICROSOFT_OPENAI_API_URL_CHAT=https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2024-02-15-preview
-
-# Stripe Configuration
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-publishable-key
-STRIPE_SECRET_KEY=sk_test_your-secret-key
-STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
-
-# MongoDB Configuration
-MONGODB_URI=mongodb+srv://your-cluster.mongodb.net/?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority&appName=your-app-name
-```
-
-##### Start the Frontend Development Server
-
-```bash
-cd llmfrontend
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
 ```
 
-The frontend will be available at `http://localhost:3000`
+### LLM Setup
 
-## 🔐 Security Configuration
+Choose one:
 
-### Required Environment Variables
+1. **NVIDIA NIM** (DGX Spark / NVIDIA GPU): Start NIM containers, set `NIM_API_BASE` in `.env`
+2. **Local model** (Apple Silicon / CPU): Download a `.gguf` model into `./models/`
+3. **OpenAI API**: Set `OPENAI_API_KEY` in `.env`
 
-#### Backend (llmbackend/.env)
-- `WEBSOCKET_AUTH_KEY`: Authentication key for WebSocket connections
-- `MONGODB_URI`: MongoDB connection string
-- `TLS_CERTIFICATE_KEY_FILE`: Path to MongoDB certificate file
-- `AZURE_OPENAI_API_KEY`: Azure OpenAI API key
-- `AZURE_OPENAI_BASE_URL`: Azure OpenAI endpoint URL
-
-#### Frontend (llmfrontend/.env.local)
-- `FIREBASE_PUBLIC_*`: Firebase configuration
-- `MICROSOFT_OPENAI_*`: Azure OpenAI configuration
-- `STRIPE_*`: Stripe payment configuration
-- `MONGODB_*`: MongoDB configuration
-- `CLOUDFLARE_*`: Cloudflare R2 storage configuration
-
-### Security Best Practices
-
-1. **Never commit `.env` files** to version control
-2. **Use different secrets** for development and production
-3. **Rotate API keys** regularly
-4. **Use least privilege access** for all service accounts
-5. **Monitor for unauthorized access**
-
-## 🐳 Docker Deployment
-
-### Backend Docker
-
-```bash
-cd llmbackend
-docker build -t resumeguru-backend .
-docker run -p 8000:8000 --env-file .env resumeguru-backend
-```
-
-### Frontend Docker
-
-```bash
-cd llmfrontend
-docker build -t resumeguru-frontend .
-docker run -p 3000:3000 --env-file .env.local resumeguru-frontend
-```
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-resumeguru_V4/
-├── llmbackend/                 # Python FastAPI backend
+├── docker-compose.yml          # Auto-starts frontend + backend
+├── backend/
+│   ├── app/
+│   │   ├── main.py             # FastAPI application
+│   │   ├── config.py           # Settings & GPU config
+│   │   ├── database.py         # SQLite models
+│   │   ├── schemas.py          # Pydantic schemas
+│   │   ├── agents/
+│   │   │   ├── orchestrator.py # LangGraph supervisor router
+│   │   │   └── tools.py        # Agent tools (DB access)
+│   │   ├── routers/
+│   │   │   ├── chat.py         # WebSocket + REST chat
+│   │   │   ├── resume.py       # Resume CRUD + upload
+│   │   │   ├── jobs.py         # Job tracking
+│   │   │   └── interview.py    # Interview sessions
+│   │   └── services/
+│   │       ├── gpu_detect.py   # Hardware auto-detection
+│   │       ├── llm_provider.py # LLM fallback chain
+│   │       └── personaplex.py  # PersonaPlex avatar/speech
+│   └── requirements.txt
+├── frontend/
 │   ├── src/
-│   │   ├── main.py            # Main FastAPI application
-│   │   ├── autogen_group_chat.py  # AI chat implementation
-│   │   └── ...
-│   ├── requirements.txt       # Python dependencies
-│   ├── Dockerfile            # Backend Docker configuration
-│   └── .env                  # Backend environment variables
-├── llmfrontend/               # Next.js frontend
-│   ├── src/
-│   │   ├── components/       # React components
-│   │   ├── pages/           # Next.js pages and API routes
-│   │   ├── helpers/         # Utility functions and API helpers
-│   │   └── ...
-│   ├── package.json         # Node.js dependencies
-│   ├── next.config.js       # Next.js configuration
-│   ├── Dockerfile          # Frontend Docker configuration
-│   └── .env.local          # Frontend environment variables
-├── scripts/
-│   └── setup-env.sh        # Environment setup script
-├── SECURITY_SETUP.md       # Security configuration guide
-└── README.md              # This file
+│   │   ├── pages/index.jsx     # Single dashboard (no routing)
+│   │   ├── components/Dashboard/
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── ChatPanel.jsx
+│   │   │   ├── ResumePanel.jsx
+│   │   │   ├── JobsPanel.jsx
+│   │   │   ├── InterviewPanel.jsx
+│   │   │   ├── AnalyticsPanel.jsx
+│   │   │   └── SettingsPanel.jsx
+│   │   ├── components/PersonaPlex/
+│   │   │   └── AvatarWidget.jsx
+│   │   └── hooks/
+│   │       ├── useApi.js
+│   │       ├── useWebSocket.js
+│   │       └── usePersonaPlex.js
+│   └── package.json
+├── llmbackend/                 # (legacy v1 backend)
+└── llmfrontend/                # (legacy v1 frontend)
 ```
 
-## 🔧 Development
+## API Endpoints
 
-### Backend Development
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| GET | `/api/status` | System status (GPU, PersonaPlex, LLM) |
+| POST | `/api/chat/message` | Send message to AI agent |
+| WS | `/api/chat/ws/{session_id}` | Real-time chat WebSocket |
+| GET/POST | `/api/resumes/` | List/create resumes |
+| POST | `/api/resumes/upload` | Upload PDF/DOCX resume |
+| GET/POST | `/api/jobs/` | List/create job descriptions |
+| GET | `/api/jobs/stats/summary` | Job pipeline stats |
+| GET | `/api/interviews/` | List interview sessions |
+| GET | `/api/interviews/stats/summary` | Interview score stats |
 
-```bash
-cd llmbackend
-# Install dependencies
-pip install -r requirements.txt
+## License
 
-# Run with auto-reload
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-
-# Run tests
-python -m pytest tests/
-```
-
-### Frontend Development
-
-```bash
-cd llmfrontend
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Run tests
-npm test
-```
-
-## 🚀 Production Deployment
-
-### Environment Variables
-
-For production, set environment variables in your deployment platform:
-
-- **Vercel**: Use the dashboard environment variables section
-- **Netlify**: Use site settings environment variables
-- **Docker**: Use `--env-file` or Docker secrets
-- **Kubernetes**: Use ConfigMaps and Secrets
-
-### Required Production Variables
-
-Ensure all environment variables are set for production, especially:
-- Database connection strings
-- API keys and secrets
-- Webhook endpoints
-- Payment processing keys
-
-## 🧪 Testing
-
-### Backend Tests
-
-```bash
-cd llmbackend
-python -m pytest tests/ -v
-```
-
-### Frontend Tests
-
-```bash
-cd llmfrontend
-npm test
-npm run test:coverage
-```
-
-## 📊 Monitoring & Logging
-
-- **Sentry**: Error tracking and performance monitoring
-- **Application Logs**: Check console output for debugging
-- **Database Monitoring**: MongoDB Atlas dashboard
-- **API Monitoring**: Azure Application Insights
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Documentation**: Check `SECURITY_SETUP.md` for security-related questions
-- **Issues**: Create an issue in the GitHub repository
-- **Email**: Contact the development team
-
-## 🔄 Updates
-
-Keep your dependencies updated:
-
-```bash
-# Backend
-cd llmbackend
-pip install --upgrade -r requirements.txt
-
-# Frontend
-cd llmfrontend
-npm update
-```
-
-## 📚 Additional Resources
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Azure OpenAI Documentation](https://docs.microsoft.com/en-us/azure/cognitive-services/openai/)
-- [MongoDB Atlas Documentation](https://docs.atlas.mongodb.com/)
-- [Firebase Documentation](https://firebase.google.com/docs)
-- [Stripe Documentation](https://stripe.com/docs)
-
----
-
-**Note**: This is a production application with real user data. Always follow security best practices and keep your environment variables secure. 
+MIT - see [LICENSE](LICENSE)
