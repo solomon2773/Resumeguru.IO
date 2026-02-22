@@ -88,12 +88,13 @@ uploads_path.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
 # --- Register routers ---
-from .routers import chat, resume, jobs, interview
+from .routers import chat, resume, jobs, interview, stream
 
 app.include_router(chat.router)
 app.include_router(resume.router)
 app.include_router(jobs.router)
 app.include_router(interview.router)
+app.include_router(stream.router)
 
 
 # --- System endpoints ---

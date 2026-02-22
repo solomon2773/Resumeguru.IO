@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Mic, MicOff, Trash2, Bot, User } from "lucide-react";
 import { clsx } from "clsx";
+import { api } from "../../hooks/useApi";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { usePersonaPlex } from "../../hooks/usePersonaPlex";
 import AvatarWidget from "../PersonaPlex/AvatarWidget";
@@ -16,17 +17,19 @@ const agentColors = {
 export default function ChatPanel() {
   const [input, setInput] = useState("");
   const [sessionId] = useState("general");
+  const [messages, setMessages] = useState([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [streamingAgent, setStreamingAgent] = useState("");
   const messagesEndRef = useRef(null);
+  const abortRef = useRef(null);
 
   const {
     connected,
-    messages,
-    setMessages,
     avatarState,
     capabilities,
     connect,
     disconnect,
-    sendMessage,
   } = useWebSocket(sessionId);
 
   const {
@@ -39,7 +42,7 @@ export default function ChatPanel() {
     useBrowserSpeech,
   } = usePersonaPlex(capabilities);
 
-  // Connect on mount
+  // Connect WebSocket for capabilities/avatar (use SSE for chat)
   useEffect(() => {
     connect();
     return () => disconnect();
@@ -48,7 +51,7 @@ export default function ChatPanel() {
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   // Handle speech transcript
   useEffect(() => {
@@ -58,12 +61,52 @@ export default function ChatPanel() {
     }
   }, [transcript, setTranscript]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     const text = input.trim();
-    if (!text) return;
-    sendMessage(text);
+    if (!text || isStreaming) return;
+
+    // Add user message
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
     setInput("");
-  };
+    setIsStreaming(true);
+    setStreamingContent("");
+    setStreamingAgent("");
+
+    // Stream response via SSE
+    const controller = api.streamMessage(text, sessionId, {
+      onAgent: (agent) => {
+        setStreamingAgent(agent);
+      },
+      onToken: (content) => {
+        setStreamingContent((prev) => prev + content);
+      },
+      onDone: (data) => {
+        setStreamingContent((prev) => {
+          // Move streaming content to messages list
+          if (prev) {
+            setMessages((msgs) => [
+              ...msgs,
+              { role: "assistant", content: prev, agent: streamingAgent || data?.agent || "general" },
+            ]);
+          }
+          return "";
+        });
+        setStreamingAgent("");
+        setIsStreaming(false);
+      },
+      onError: (err) => {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `Error: ${err}`, agent: "general" },
+        ]);
+        setStreamingContent("");
+        setStreamingAgent("");
+        setIsStreaming(false);
+      },
+    });
+
+    abortRef.current = controller;
+  }, [input, isStreaming, sessionId, streamingAgent]);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -73,7 +116,11 @@ export default function ChatPanel() {
   };
 
   const handleClear = () => {
+    if (abortRef.current) abortRef.current.abort();
     setMessages([]);
+    setStreamingContent("");
+    setIsStreaming(false);
+    api.clearChat(sessionId).catch(() => {});
   };
 
   return (
@@ -96,7 +143,7 @@ export default function ChatPanel() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {messages.length === 0 && (
+          {messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-3">
               <Bot size={48} strokeWidth={1.5} />
               <p className="text-sm">Hi! I'm your AI career assistant. Ask me anything.</p>
@@ -134,7 +181,7 @@ export default function ChatPanel() {
               )}
               <div
                 className={clsx(
-                  "max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                  "max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap",
                   msg.role === "user"
                     ? "bg-brand-600 text-white"
                     : "bg-gray-100 text-gray-800"
@@ -155,17 +202,25 @@ export default function ChatPanel() {
             </div>
           ))}
 
-          {avatarState === "thinking" && (
-            <div className="animate-fade-in-up flex gap-3">
+          {/* Streaming response */}
+          {isStreaming && (
+            <div className="animate-fade-in-up flex gap-3 justify-start">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100">
                 <Bot size={16} className="text-brand-600" />
               </div>
-              <div className="rounded-2xl bg-gray-100 px-4 py-3">
-                <div className="flex gap-1">
-                  <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "300ms" }} />
-                </div>
+              <div className="max-w-[70%] rounded-2xl bg-gray-100 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-gray-800">
+                {streamingContent || (
+                  <div className="flex gap-1">
+                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                )}
+                {streamingAgent && (
+                  <p className={clsx("mt-1 text-xs opacity-60", agentColors[streamingAgent])}>
+                    {streamingAgent} agent
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -195,10 +250,11 @@ export default function ChatPanel() {
               placeholder="Type a message or use voice..."
               rows={1}
               className="input flex-1 resize-none"
+              disabled={isStreaming}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || !connected}
+              disabled={!input.trim() || isStreaming}
               className="btn-primary"
             >
               <Send size={16} />

@@ -1,546 +1,451 @@
-# CareerOS: ResumeGuru.IO Agentic AI Rewrite Plan
+# CareerOS: The Proactive Career Agent
+
+## Strategic Purpose
+
+This is not just a resume tool — it's a **living portfolio** designed to demonstrate mastery of the NVIDIA Inference Microservices (NIM) ecosystem, open-source inference integration, and Day-0 model support. Every architectural decision maps to a specific NVIDIA job requirement.
+
+---
 
 ## Table of Contents
 
-1. [Current Architecture Analysis](#1-current-architecture-analysis)
-2. [Executive Summary: CareerOS Agent](#2-executive-summary-careeros-agent)
-3. [Target Architecture](#3-target-architecture)
-4. [Tech Stack & Components](#4-tech-stack--components)
-5. [Backend Rewrite: Python Agent System](#5-backend-rewrite-python-agent-system)
+1. [The "Hybrid-Inference" Architecture](#1-the-hybrid-inference-architecture)
+2. [Current Implementation Status](#2-current-implementation-status)
+3. [Technical Stack & NVIDIA Alignment](#3-technical-stack--nvidia-alignment)
+4. [System Architecture](#4-system-architecture)
+5. [Backend: Python Agent System](#5-backend-python-agent-system)
 6. [Agent Modules & LangGraph Workflows](#6-agent-modules--langgraph-workflows)
-7. [Frontend Migration Strategy](#7-frontend-migration-strategy)
+7. [Frontend: Next.js Dashboard](#7-frontend-nextjs-dashboard)
 8. [Infrastructure & Docker Compose](#8-infrastructure--docker-compose)
-9. [Data Migration](#9-data-migration)
-10. [Implementation Phases](#10-implementation-phases)
-11. [File-by-File Migration Map](#11-file-by-file-migration-map)
-12. [Risk Analysis & Mitigations](#12-risk-analysis--mitigations)
+9. [Feature Specifications](#9-feature-specifications)
+10. [Implementation Roadmap (6-Week Sprints)](#10-implementation-roadmap-6-week-sprints)
+11. [Hardware Requirements](#11-hardware-requirements)
+12. [NVIDIA Job Alignment Map](#12-nvidia-job-alignment-map)
+13. [Risk Analysis & Mitigations](#13-risk-analysis--mitigations)
 
 ---
 
-## 1. Current Architecture Analysis
+## 1. The "Hybrid-Inference" Architecture
 
-### What Exists Today
+The core differentiator: CareerOS **detects hardware at startup** and automatically selects the optimal inference path. This proves you understand developer workflows and hardware constraints.
 
-**Frontend (`llmfrontend/`)** - Next.js 13.3 + React 18 + Tailwind CSS
-- 120+ files across pages, components, helpers, API routes
-- AI logic split between:
-  - **Next.js API routes** (`pages/api/`) - Server-side OpenAI/Azure calls
-  - **LangChain JS helpers** (`helpers/langChain/`) - Prompt templates + Zod schemas
-  - **LLM Agents** (`helpers/llmAgents/interviewAgent.js`) - Early LangGraph StateGraph prototype
-- Uses `@langchain/core@0.1.53`, `@langchain/langgraph@0.0.21`, `langchain@0.0.214` (outdated JS versions)
-- AI calls go directly to Azure OpenAI (GPT-4o) from Next.js API routes
-- Firebase Auth, MongoDB Atlas, Cloudflare R2, Stripe, SendGrid, Sentry
+### Mode A: "Student / Mac" Mode (Cloud-Native NIM)
 
-**Backend (`llmbackend/`)** - Python FastAPI + AutoGen
-- **4 core files**: `main.py`, `autogen_group_chat.py`, `user_proxy_webagent.py`, `groupchatweb.py`
-- WebSocket-based mock interview with AutoGen GroupChat (4 agents: Interviewer, DBSearch, Feedback, Critic)
-- Azure OpenAI GPT-4o via AutoGen's `config_list`
-- MongoDB for chat logging and JD retrieval
+- **Target**: MacBook Pro (M2/M3/M4/M5) or any laptop without NVIDIA GPU
+- **Constraint**: No CUDA containers possible
+- **Solution**: Local Docker runs the logic (LangGraph + FastAPI), offloads LLM inference to NVIDIA NIM Cloud APIs via `langchain-nvidia-ai-endpoints`, or falls back to local `llama.cpp` with Metal acceleration
+- **JD Value**: Shows you know how to integrate NVIDIA's remote APIs into a lightweight client
 
-### Key Problems to Solve
+### Mode B: "Enterprise / DGX" Mode (Local NIM)
 
-| Problem | Current State | Target State |
-|---------|--------------|--------------|
-| **Reactive only** | User must initiate every action | Proactive: agents find jobs, notify user |
-| **Cloud-dependent AI** | All inference via Azure OpenAI | Local NVIDIA NIM (privacy, speed, cost) |
-| **Fragmented AI logic** | Split across JS frontend + Python backend | Unified Python agent orchestration |
-| **No vision/multimodal** | Text-only | VILA/LLaVA for visual interview coaching |
-| **No speech** | Azure Speech SDK (cloud) | NVIDIA Riva (local, <100ms latency) |
-| **Stateless workflows** | Simple request-response chains | LangGraph stateful cyclic workflows with memory |
-| **No autonomous browsing** | Manual job applications | Headless browser agent for auto-apply |
-| **Outdated LangChain** | JS v0.0.214 | Python LangChain v0.3+ / LangGraph v0.2+ |
+- **Target**: NVIDIA DGX Spark GB10, Linux workstations with RTX GPUs
+- **Solution**: System detects NVIDIA hardware via `nvidia-smi`, auto-configures to use Local NIM containers (e.g., `nvcr.io/nim/meta/llama-3.1-70b-instruct`)
+- **JD Value**: Demonstrates deploying and orchestrating self-hosted NVIDIA microservices
 
----
+### How It Works (Already Implemented)
 
-## 2. Executive Summary: CareerOS Agent
+```
+Startup → gpu_detect.py → nvidia-smi found?
+  ├─ YES → DGX Spark / NVIDIA GPU detected
+  │         ├─ VRAM ≥ 40GB → llama-3.1-70b-instruct (NIM)
+  │         ├─ VRAM ≥ 8GB  → llama-3.1-8b-instruct (NIM)
+  │         └─ VRAM < 8GB  → local llama.cpp
+  │
+  └─ NO → Apple Silicon? (sysctl machdep.cpu.brand_string)
+           ├─ YES → llama.cpp with Metal GPU offload
+           └─ NO  → llama.cpp CPU-only or OpenAI API fallback
+```
 
-CareerOS is a **full-lifecycle Career Manager** that runs on local NVIDIA hardware. Unlike the current ResumeGuru (which is reactive and cloud-dependent), CareerOS:
-
-1. **Proactively** finds jobs, analyzes skill gaps, and notifies you
-2. **Coaches multimodally** - vision (VLM for physical objects), voice (Riva STT/TTS), code execution
-3. **Runs locally** - all resumes, strategies, recordings stay on your Docker swarm
-4. **Acts autonomously** - fills applications, manages your pipeline
+**Implementation**: `backend/app/services/gpu_detect.py` + `backend/app/services/llm_provider.py`
 
 ---
 
-## 3. Target Architecture
+## 2. Current Implementation Status
+
+### What's Built and Working
+
+| Component | Status | File(s) |
+|-----------|--------|---------|
+| GPU auto-detection (DGX/NVIDIA/Apple/CPU) | **100%** | `backend/app/services/gpu_detect.py` |
+| LLM fallback chain (NIM → llama.cpp → OpenAI) | **85%** | `backend/app/services/llm_provider.py` |
+| LangGraph supervisor + 5 agents | **70%** | `backend/app/agents/orchestrator.py` |
+| Database tools (7 CRUD tools) | **40%** | `backend/app/agents/tools.py` |
+| PersonaPlex service stubs (health checks, TTS/ASR stubs) | **50%** | `backend/app/services/personaplex.py` |
+| FastAPI server with CORS, static files, lifespan | **100%** | `backend/app/main.py` |
+| Pydantic config with .env support | **100%** | `backend/app/config.py` |
+| SQLite database (6 tables) | **100%** | `backend/app/database.py` |
+| Pydantic schemas (request/response validation) | **100%** | `backend/app/schemas.py` |
+| Chat router (WebSocket + REST) | **90%** | `backend/app/routers/chat.py` |
+| Resume router (CRUD + file upload + text extraction) | **100%** | `backend/app/routers/resume.py` |
+| Jobs router (CRUD + stats + pipeline) | **100%** | `backend/app/routers/jobs.py` |
+| Interview router (CRUD + stats) | **100%** | `backend/app/routers/interview.py` |
+| Frontend: Dashboard with 6 panels | **95%** | `frontend/src/components/Dashboard/` |
+| Frontend: AvatarWidget (visual states) | **60%** | `frontend/src/components/PersonaPlex/AvatarWidget.jsx` |
+| Frontend: REST API client | **100%** | `frontend/src/hooks/useApi.js` |
+| Frontend: WebSocket hook | **100%** | `frontend/src/hooks/useWebSocket.js` |
+| Frontend: Browser Speech fallback | **80%** | `frontend/src/hooks/usePersonaPlex.js` |
+| Dockerfiles (frontend + backend) | **100%** | `backend/Dockerfile`, `frontend/Dockerfile` |
+
+### What's NOT Built Yet (Priority Order for NVIDIA Portfolio)
+
+| Feature | Priority | JD Alignment |
+|---------|----------|--------------|
+| docker-compose with NIM stack | **P0** | Demonstrates NIM orchestration |
+| Agent intelligence (JD extraction, skill gap, resume optimization tools) | **P0** | Complex agent logic, not just API calls |
+| SSE streaming for chat responses | **P1** | Modern AI UX |
+| Riva STT/TTS working integration | **P1** | NIM speech services |
+| VILA Vision integration | **P1** | NIM multimodal |
+| Qdrant + NV-Embed vector search | **P1** | NIM embeddings |
+| Piston code execution sandbox | **P2** | Skill-Check feature |
+| Market Watcher proactive agent | **P2** | Autonomous agent design |
+| Monaco Editor for coding interviews | **P2** | Rich interview UX |
+| Application Bot (auto-apply) | **P3** | Browser automation |
+| AnalyticsPanel real charts | **P3** | Dashboard polish |
+
+---
+
+## 3. Technical Stack & NVIDIA Alignment
+
+| Component | Technology | NVIDIA Integration |
+|-----------|-----------|-------------------|
+| **Agent Orchestrator** | LangGraph (Python) | Stateful cyclic supervisor graph — shows complex agent design, not just linear chains |
+| **LLM Inference** | Llama 3.1 (8B/70B) | Accessed via `ChatNVIDIA` from `langchain-nvidia-ai-endpoints` |
+| **Vision (Multimodal)** | NVIDIA VILA / LLaVA | NIM container for visual interview coaching |
+| **Speech (STT/TTS)** | NVIDIA Riva | Real-time Mock Interview voice mode |
+| **Embeddings** | NV-Embed-v1 | `NVIDIAEmbeddings` for semantic resume↔JD matching |
+| **Vector Search** | Qdrant (Local Docker) | Stores resume + JD embeddings for gap analysis |
+| **Code Sandbox** | Piston | Dockerized code execution for Skill-Check interviews |
+| **Database** | SQLite (SQLAlchemy) | Zero-config local-first, single-user design |
+| **Frontend** | Next.js 14 + Tailwind CSS | Single-page dashboard with WebSocket real-time chat |
+| **Backend** | FastAPI + Uvicorn | WebSocket + REST API, async-native |
+
+---
+
+## 4. System Architecture
 
 ```
 +------------------+     +------------------+     +-------------------+
-|   User Device    |     |  Next.js Frontend|     |  FastAPI + LangGraph
-|  (Mac/PC/Mobile) |---->|  (Dashboard UI)  |---->|  (Agent Orchestrator)
-|                  |     |  + React Webcam   |     |                   |
+|   User Device    |     |  Next.js 14      |     |  FastAPI + LangGraph
+|  (Mac/PC/DGX)   |---->|  Dashboard UI    |---->|  Agent Orchestrator
+|                  |     |  Port 3000       |     |  Port 8000        |
 +------------------+     +------------------+     +--------+----------+
                                                            |
-                              +----------------------------+----------------------------+
-                              |                            |                            |
-                    +---------v---------+      +-----------v----------+    +------------v-----------+
-                    | Supervisor Agent  |      |  Market Watcher Agent |    | Interview Coach Agent  |
-                    | (LangGraph Router)|      |  (Proactive Loop)    |    | (Multimodal)           |
-                    +-------------------+      +----------------------+    +------------------------+
-                              |                            |                            |
-              +---------------+---------------+            |            +---------------+---------------+
-              |               |               |            |            |               |               |
-     +--------v------+ +-----v-------+ +-----v-----+  +--v---+  +----v----+   +-------v------+ +------v------+
-     | Resume Analyst | | Application | | Gap       |  |Celery|  |NIM:VILA |   |NIM:Llama3-70B| | Piston      |
-     | Agent          | | Bot Agent   | | Analyzer  |  |+Redis|  |(Vision) |   |(Reasoning)   | | (Code Exec) |
-     +----------------+ +-------------+ +-----------+  +------+  +---------+   +--------------+ +-------------+
-              |                                                        |               |
-     +--------v--------+                                      +-------v-------+ +------v------+
-     | NV-Embed-v1     |                                      | NVIDIA Riva   | | Qdrant      |
-     | (Embeddings)    |                                      | (STT/TTS)     | | (Vector DB) |
-     +-----------------+                                      +---------------+ +-------------+
+                         +---------------------------------+----------------------------------+
+                         |                |                |                |                  |
+              +----------v---------+  +--v--------+  +---v---------+  +--v---------+  +-----v-------+
+              | Supervisor Router  |  | Resume    |  | Interview   |  | Job        |  | General     |
+              | (Intent Classify)  |  | Agent     |  | Agent       |  | Agent      |  | Agent       |
+              +--------------------+  +-----------+  +-------------+  +------------+  +-------------+
+                         |                                |                |
+              +----------v---------+           +---------v--------+  +---v-----------+
+              | LangChain Tools    |           | PersonaPlex      |  | Vector Store  |
+              | (DB CRUD, Parse,   |           | - Riva STT/TTS   |  | - Qdrant      |
+              |  Analyze, Score)   |           | - Audio2Face     |  | - NV-Embed-v1 |
+              +--------------------+           +------------------+  +---------------+
+                         |
+              +----------v---------+
+              | LLM Provider       |
+              | NIM → llama.cpp    |
+              |   → OpenAI API     |
+              +--------------------+
 ```
 
 ---
 
-## 4. Tech Stack & Components
+## 5. Backend: Python Agent System
 
-| Component | Technology | Role |
-|-----------|-----------|------|
-| **Orchestration** | LangGraph (Python) | Stateful cyclic agent workflows, supervisor routing |
-| **LLM Inference** | NVIDIA NIM (Docker) | Llama 3 70B (reasoning), Mistral Large (coding) |
-| **Vision AI** | NVIDIA NIM | VILA / LLaVA-Next for visual analysis |
-| **Embeddings** | NVIDIA NIM | NV-Embed-v1 for semantic matching |
-| **Speech** | NVIDIA Riva | Real-time STT/TTS, <100ms latency |
-| **Vector DB** | Qdrant (Docker) | Job embeddings, resume versions, semantic search |
-| **Proactive Loop** | Celery + Redis | Scheduled "Market Watcher" tasks (configurable interval) |
-| **Code Sandbox** | Piston (Docker) | Safe code execution during technical interviews |
-| **Web Scraping** | Playwright / browser-use | Headless browser for job scraping and auto-apply |
-| **Frontend** | Next.js 14+ + Tailwind | Dashboard, video interview UI, real-time streaming |
-| **Database** | MongoDB Atlas (existing) | User data, resumes, chat logs (migrated schema) |
-| **Auth** | Firebase Auth (existing) | Keep existing auth - no migration needed |
-| **Payments** | Stripe (existing) | Keep existing billing - no migration needed |
-| **Agent Framework** | LangChain v0.3+ Python | Chains, tools, structured output, NVIDIA integration |
-| **NVIDIA SDK** | `langchain-nvidia-ai-endpoints` | ChatNVIDIA, NVIDIAEmbeddings LangChain integration |
-| **Monitoring** | LangSmith + Sentry | Agent trace debugging, error tracking |
-
----
-
-## 5. Backend Rewrite: Python Agent System
-
-### Directory Structure
+### Directory Structure (Current)
 
 ```
-llmbackend/
-├── src/
-│   ├── main.py                          # FastAPI app entry point
-│   ├── config.py                        # Settings via pydantic-settings
-│   ├── dependencies.py                  # Shared FastAPI dependencies
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                    # FastAPI app, lifespan, CORS, router registration
+│   ├── config.py                  # Pydantic settings + ComputeBackend enum
+│   ├── database.py                # SQLAlchemy: Resume, JobDescription, InterviewSession,
+│   │                              #   ChatMessage, CoverLetter, AppSetting
+│   ├── schemas.py                 # Pydantic request/response models
 │   │
-│   ├── agents/                          # LangGraph Agent Definitions
+│   ├── agents/
 │   │   ├── __init__.py
-│   │   ├── supervisor.py                # Supervisor agent (routes to sub-agents)
-│   │   ├── resume_analyst.py            # Resume rewrite, skills analysis, gap analysis
-│   │   ├── market_watcher.py            # Proactive job scraping + semantic matching
-│   │   ├── interview_coach.py           # Multimodal interview coaching
-│   │   ├── application_bot.py           # Autonomous job application submission
-│   │   └── cover_letter.py              # Cover letter generation agent
+│   │   ├── orchestrator.py        # LangGraph supervisor graph (5 agent nodes + router)
+│   │   └── tools.py               # LangChain tools (search_resumes, save_job, etc.)
 │   │
-│   ├── graphs/                          # LangGraph Workflow Definitions
+│   ├── services/
 │   │   ├── __init__.py
-│   │   ├── career_graph.py              # Main supervisor graph
-│   │   ├── interview_graph.py           # Interview session subgraph
-│   │   ├── resume_graph.py              # Resume processing subgraph
-│   │   ├── watcher_graph.py             # Market watcher proactive graph
-│   │   └── application_graph.py         # Auto-apply subgraph
+│   │   ├── gpu_detect.py          # NVIDIA/Apple/CPU auto-detection
+│   │   ├── llm_provider.py        # NIM → llama.cpp → OpenAI fallback chain
+│   │   └── personaplex.py         # Riva STT/TTS + Audio2Face health checks + stubs
 │   │
-│   ├── tools/                           # LangChain Tools
-│   │   ├── __init__.py
-│   │   ├── job_scraper.py               # Playwright-based job scraper
-│   │   ├── resume_parser.py             # PDF/DOCX resume parsing
-│   │   ├── code_executor.py             # Piston sandbox integration
-│   │   ├── vector_store.py              # Qdrant vector operations
-│   │   ├── mongodb_tools.py             # MongoDB CRUD operations
-│   │   ├── notification.py              # Email/Slack/webhook notifications
-│   │   └── browser_agent.py             # Autonomous browser for auto-apply
-│   │
-│   ├── models/                          # Pydantic Models & Schemas
-│   │   ├── __init__.py
-│   │   ├── resume.py                    # Resume data models
-│   │   ├── job.py                       # Job description models
-│   │   ├── interview.py                 # Interview session models
-│   │   ├── agent_state.py               # LangGraph state definitions
-│   │   └── user.py                      # User profile models
-│   │
-│   ├── llm/                             # LLM Provider Configuration
-│   │   ├── __init__.py
-│   │   ├── nvidia_nim.py                # ChatNVIDIA / NVIDIAEmbeddings setup
-│   │   ├── vision.py                    # VILA/LLaVA NIM client
-│   │   └── speech.py                    # Riva STT/TTS client
-│   │
-│   ├── api/                             # FastAPI Route Handlers
-│   │   ├── __init__.py
-│   │   ├── resume.py                    # Resume CRUD + AI rewrite endpoints
-│   │   ├── interview.py                 # Interview session WebSocket + REST
-│   │   ├── jobs.py                      # Job search, matching, applications
-│   │   ├── cover_letter.py              # Cover letter generation
-│   │   ├── dashboard.py                 # Dashboard stats and pipeline
-│   │   ├── notifications.py             # Notification preferences
-│   │   └── ws.py                        # WebSocket manager for streaming
-│   │
-│   ├── tasks/                           # Celery Background Tasks
-│   │   ├── __init__.py
-│   │   ├── celery_app.py                # Celery configuration
-│   │   ├── market_scan.py               # Scheduled job market scanning
-│   │   └── embedding_sync.py            # Background embedding generation
-│   │
-│   └── middleware/                       # FastAPI Middleware
+│   └── routers/
 │       ├── __init__.py
-│       ├── auth.py                       # Firebase token verification
-│       └── cors.py                       # CORS configuration
+│       ├── chat.py                # WebSocket + REST chat with agent graph
+│       ├── resume.py              # Resume CRUD + file upload (PDF/DOCX/DOC/TXT)
+│       ├── jobs.py                # Job tracking with pipeline stats
+│       └── interview.py           # Interview session CRUD + stats
 │
-├── tests/
-│   ├── test_agents/
-│   ├── test_graphs/
-│   ├── test_tools/
-│   └── test_api/
-│
-├── docker-compose.yml                    # Full stack orchestration
-├── Dockerfile                            # Backend container
-├── requirements.txt                      # Python dependencies
-├── pyproject.toml                        # Project metadata
-└── .env.example                          # Environment template
+├── data/                          # SQLite DB + uploads (gitignored)
+├── models/                        # Local .gguf models (gitignored)
+├── requirements.txt
+├── Dockerfile
+└── .env.example
 ```
 
-### New `requirements.txt`
+### Target Directory Structure (Adding)
 
 ```
-# Core Framework
+backend/app/
+├── ...existing...
+├── agents/
+│   ├── orchestrator.py            # (existing) Supervisor + router
+│   ├── tools.py                   # (existing → enhance) Add AI-powered tools
+│   ├── resume_tools.py            # NEW: AI resume parsing, optimization, ATS scoring
+│   ├── interview_tools.py         # NEW: Question generation, answer evaluation
+│   └── job_tools.py               # NEW: JD extraction, skill gap analysis
+│
+├── services/
+│   ├── ...existing...
+│   ├── vector_store.py            # NEW: Qdrant + NV-Embed integration
+│   └── code_sandbox.py            # NEW: Piston integration for Skill-Check
+│
+└── routers/
+    ├── ...existing...
+    └── stream.py                  # NEW: SSE streaming endpoint
+```
+
+### Requirements (Current)
+
+```
+# Core
 fastapi>=0.115.0
-uvicorn[standard]>=0.34.0
-python-multipart>=0.0.18
-websockets>=14.0
-pydantic>=2.10.0
-pydantic-settings>=2.7.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+websockets>=13.0
 
 # LangChain + LangGraph
-langchain>=0.3.14
-langchain-core>=0.3.28
-langgraph>=0.2.60
-langchain-community>=0.3.14
-langsmith>=0.2.10
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langgraph>=0.2.0
+langchain-nvidia-ai-endpoints>=0.3.0
 
-# NVIDIA AI Endpoints
-langchain-nvidia-ai-endpoints>=0.3.8
+# Local LLM (Apple Silicon / CPU)
+llama-cpp-python>=0.3.0
 
-# NVIDIA Riva (Speech)
+# Database
+sqlalchemy>=2.0.0
+aiosqlite>=0.20.0
+
+# NVIDIA Speech
 nvidia-riva-client>=2.17.0
 
-# Vector Database
+# GPU detection
+psutil>=6.0.0
+py3nvml>=0.2.7
+
+# Pydantic
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+
+# Document processing
+python-docx>=1.1.0
+pypdf>=4.0.0
+
+# HTTP
+httpx>=0.27.0
+aiohttp>=3.10.0
+
+# Utilities
+python-dotenv>=1.0.0
+python-dateutil>=2.9.0
+```
+
+### Requirements to Add (for remaining features)
+
+```
+# Vector search
 langchain-qdrant>=0.2.0
 qdrant-client>=1.12.0
 
-# Database
-pymongo[srv]>=4.10.0
-motor>=3.6.0
+# Background tasks (Market Watcher)
+apscheduler>=3.10.0          # Simpler than Celery for single-user
 
-# Background Tasks
-celery[redis]>=5.4.0
-redis>=5.2.0
-
-# Web Scraping
-playwright>=1.49.0
-browser-use>=0.1.0
-beautifulsoup4>=4.12.0
-
-# Document Processing
-pypdf>=5.1.0
-python-docx>=1.1.0
-pdf2image>=1.17.0
-
-# Auth
-firebase-admin>=6.6.0
-python-jose[cryptography]>=3.3.0
-
-# HTTP Client
-httpx>=0.28.0
-aiohttp>=3.11.0
-
-# Utilities
-python-dotenv>=1.0.1
-python-dateutil>=2.9.0
-
-# Monitoring
-sentry-sdk[fastapi]>=2.19.0
-
-# Dev/Test
-pytest>=8.3.0
-pytest-asyncio>=0.24.0
-pytest-cov>=6.0.0
-ruff>=0.8.0
+# Code execution
+httpx>=0.27.0                # (already included) for Piston API calls
 ```
 
 ---
 
 ## 6. Agent Modules & LangGraph Workflows
 
-### 6A. Supervisor Agent (Main Router)
+### 6A. Supervisor Router (Implemented)
+
+The supervisor uses LLM-based intent classification to route messages to the correct specialist agent. Each agent has tool bindings for database operations.
 
 ```python
-# src/graphs/career_graph.py (conceptual)
+# backend/app/agents/orchestrator.py (current implementation)
 
-from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import create_react_agent
-
-class CareerState(TypedDict):
+class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
-    user_profile: dict
-    current_task: str          # "resume_rewrite" | "interview" | "job_search" | "apply"
-    job_matches: list[dict]
-    resume_data: dict
-    interview_state: dict
-    next_agent: str
+    current_agent: str          # "resume" | "interview" | "feedback" | "job" | "general"
+    session_id: str
 
-def supervisor_node(state: CareerState) -> CareerState:
-    """Routes to the appropriate sub-agent based on user intent or proactive triggers."""
-    # Uses Llama 3 70B to classify intent and route
-    ...
-
-def build_career_graph():
-    graph = StateGraph(CareerState)
-
-    graph.add_node("supervisor", supervisor_node)
-    graph.add_node("resume_analyst", resume_analyst_node)
-    graph.add_node("market_watcher", market_watcher_node)
-    graph.add_node("interview_coach", interview_coach_node)
-    graph.add_node("application_bot", application_bot_node)
-    graph.add_node("cover_letter", cover_letter_node)
-
-    graph.add_edge(START, "supervisor")
-    graph.add_conditional_edges("supervisor", route_to_agent, {
-        "resume": "resume_analyst",
-        "search": "market_watcher",
-        "interview": "interview_coach",
-        "apply": "application_bot",
-        "cover_letter": "cover_letter",
-        "done": END,
-    })
-
-    # Sub-agents can loop back to supervisor
-    for agent in ["resume_analyst", "market_watcher", "interview_coach",
-                   "application_bot", "cover_letter"]:
-        graph.add_edge(agent, "supervisor")
-
-    return graph.compile(checkpointer=MemorySaver())
+# Router → classifies intent → routes to agent
+# Agent → invokes LLM with system prompt + tools → checks for tool calls
+# Tool calls → execute tools → return to same agent
+# No tool calls → END
 ```
 
-### 6B. Market Watcher Agent (Proactive)
+**Current agents**:
+- **Router**: LLM-based intent classification (5 categories)
+- **Resume Agent**: Resume CRUD with search_resumes, get_resume_detail, save_resume tools
+- **Interview Agent**: "Hannah" persona, mock interviews with interview history tools
+- **Feedback Agent**: Answer evaluation and scoring (text-only, no tools yet)
+- **Job Agent**: Job tracking with search_jobs, save_job tools
+- **General Agent**: Cover letters, LinkedIn messages, general career advice
+
+### 6B. Planned Agent Enhancements
+
+**New tools to add to agents**:
 
 ```python
-# src/agents/market_watcher.py (conceptual)
-
-class MarketWatcherState(TypedDict):
-    user_profile: dict
-    target_roles: list[str]
-    target_companies: list[str]
-    scraped_jobs: list[dict]
-    matched_jobs: list[dict]
-    notifications_sent: list[str]
-
-def scrape_jobs_node(state):
-    """Uses Playwright to scrape target job boards."""
-    # Scrapes LinkedIn, company career pages, Indeed
-    # Returns raw JD text + metadata
+# Resume Agent tools (NEW)
+@tool
+def extract_resume_from_pdf(file_path: str) -> str:
+    """AI-powered structured extraction from resume PDF/DOCX."""
+    # Uses LLM to parse raw_text into structured fields
     ...
 
-def embed_and_match_node(state):
-    """Embeds JDs with NV-Embed-v1, matches against user profile."""
-    # Uses NVIDIAEmbeddings for semantic similarity
-    # Threshold: score > 0.85 triggers notification
+@tool
+def optimize_resume_for_jd(resume_id: int, job_id: int) -> str:
+    """Tailor resume bullets to match a specific job description."""
+    # Compares resume experience vs JD requirements
+    # Rewrites bullets with relevant keywords
     ...
 
-def gap_analysis_node(state):
-    """Analyzes skill gaps for high-match jobs."""
-    # Uses Llama 3 70B to compare JD requirements vs user skills
-    # Produces: missing skills, recommended learning path
+@tool
+def calculate_ats_score(resume_id: int, job_id: int) -> str:
+    """Score resume against JD for ATS keyword matching."""
     ...
 
-def notify_user_node(state):
-    """Sends notification with match results + gap analysis."""
-    # Email, Slack webhook, or in-app notification
+# Job Agent tools (NEW)
+@tool
+def extract_jd_skills(description: str) -> str:
+    """Extract required/preferred skills from a job description."""
+    # Uses LLM structured output to pull skills, requirements
     ...
 
-# Celery periodic task
-@celery_app.task
-def run_market_scan(user_id: str):
-    """Runs every 6 hours (configurable per user)."""
-    graph = build_watcher_graph()
-    result = graph.invoke({"user_id": user_id, ...})
+@tool
+def analyze_skill_gap(resume_id: int, job_id: int) -> str:
+    """Compare user skills against JD requirements, identify gaps."""
+    ...
+
+# Interview Agent tools (NEW)
+@tool
+def generate_interview_questions(job_id: int, question_type: str) -> str:
+    """Generate role-specific interview questions from JD."""
+    ...
+
+@tool
+def evaluate_answer(question: str, answer: str, job_context: str) -> str:
+    """Score an interview answer on relevance, structure, specificity."""
     ...
 ```
 
-### 6C. Interview Coach Agent (Multimodal)
+### 6C. Market Watcher Agent (Phase 3 - Planned)
 
 ```python
-# src/agents/interview_coach.py (conceptual)
-
-class InterviewState(TypedDict):
-    messages: Annotated[list, add_messages]
-    job_description: dict
-    role_type: str              # "software" | "industrial" | "behavioral" | "system_design"
-    interview_mode: str         # "text" | "voice" | "video" | "coding"
-    camera_frames: list[bytes]  # For vision-based coaching
-    code_submissions: list[dict]
-    feedback_history: list[dict]
-    score: float
-
-# Software Engineering Mode
-def coding_challenge_node(state):
-    """Presents coding problems, executes via Piston, analyzes complexity."""
-    ...
-
-def code_review_node(state):
-    """Reviews code for correctness, complexity, and style."""
-    # Runs code in Piston sandbox
-    # Analyzes O(n) complexity
-    # Provides refactoring tips
-    ...
-
-# Industrial Engineering / Hardware Mode
-def vision_analysis_node(state):
-    """Uses VILA NIM to analyze camera frames."""
-    # Sends base64 frame to NIM vision endpoint
-    # Identifies objects, materials, manufacturing processes
-    # Generates contextual interview questions
-    ...
-
-# Voice Mode
-def speech_to_text_node(state):
-    """Converts speech to text via Riva."""
-    ...
-
-def text_to_speech_node(state):
-    """Converts agent response to speech via Riva."""
-    ...
-```
-
-### 6D. Resume Analyst Agent
-
-```python
-# src/agents/resume_analyst.py (conceptual)
-
-class ResumeAnalystState(TypedDict):
-    resume_data: dict           # Parsed resume sections
-    job_description: dict       # Target JD
-    rewritten_experiences: list[dict]
-    skills_analysis: dict       # existing, missing, recommended
-    overview_rewrite: str
-    cover_letter: str
-    ats_score: float
-
-def parse_resume_node(state):
-    """Parses uploaded PDF/DOCX into structured data."""
-    ...
-
-def rewrite_experiences_node(state):
-    """Rewrites professional experiences aligned to JD."""
-    # Replaces current: helpers/langChain/prompts/myResume/resume.js
-    # Uses ChatNVIDIA with structured output (Zod-equivalent Pydantic models)
-    ...
-
-def analyze_skills_node(state):
-    """Identifies existing, missing, and recommended skills."""
-    # Replaces current: resumeAiTargetSkillsModel
-    ...
-
-def rewrite_overview_node(state):
-    """Rewrites resume overview/summary."""
-    # Replaces current: pages/api/rewriteOverview.js
-    ...
-
-def generate_ats_score_node(state):
-    """Scores resume against ATS keyword matching."""
-    ...
-```
-
-### 6E. Application Bot Agent
-
-```python
-# src/agents/application_bot.py (conceptual)
-
-class ApplicationState(TypedDict):
-    job_url: str
-    tailored_resume_pdf: bytes
-    cover_letter: str
-    application_fields: dict
-    status: str                 # "pending" | "submitted" | "failed"
-
-def navigate_to_portal_node(state):
-    """Opens job application portal via headless browser."""
-    ...
-
-def fill_application_node(state):
-    """Fills form fields using browser automation."""
-    ...
-
-def upload_documents_node(state):
-    """Uploads tailored resume PDF and cover letter."""
-    ...
-
-def confirm_submission_node(state):
-    """Verifies submission and logs status."""
-    ...
+# Proactive background agent
+# Runs on configurable schedule (default: every 6 hours)
+# Workflow:
+#   1. Wake up (APScheduler trigger)
+#   2. Scan target company career pages
+#   3. Extract JDs, embed with NV-Embed-v1
+#   4. Semantic match against user resume embeddings in Qdrant
+#   5. Gap analysis for high-match results
+#   6. In-app notification (no external email needed for v1)
 ```
 
 ---
 
-## 7. Frontend Migration Strategy
+## 7. Frontend: Next.js Dashboard
 
-### What Changes
+### Architecture
 
-| Current (Next.js API Routes) | New (FastAPI Backend) |
-|-------------------------------|----------------------|
-| `pages/api/rewriteOverview.js` -> Direct Azure OpenAI call | `POST /api/v1/resume/rewrite-overview` -> Agent graph |
-| `pages/api/jdInfoExtractLangChainStreaming.js` -> LangChain JS | `POST /api/v1/jobs/extract-jd` -> Agent tool |
-| `pages/api/streaming/myResume/experienceRewrite.js` | `POST /api/v1/resume/rewrite-experience` (SSE) |
-| `pages/api/searchJdExtractor.js` | `POST /api/v1/jobs/search` |
-| WebSocket mock interview (autogen backend) | `WS /api/v1/interview/{session_id}` (LangGraph) |
-| `helpers/langChain/*` (JS prompts/functions) | Python `src/agents/*` + `src/models/*` |
-| `helpers/helperApis/*` (frontend API calls) | Updated to call new FastAPI endpoints |
+Single-page dashboard with panel-based navigation. No routing complexity — one page, six panels.
 
-### What Stays the Same
+### Directory Structure (Current)
 
-- **Firebase Auth** - keep existing `helpers/firebase/firebase.js`
-- **MongoDB helpers** - keep `helpers/mongodb/*` (read operations)
-- **Stripe** - keep `pages/api/stripe/*`
-- **Email** - keep `pages/api/mail/*`
-- **UI Components** - keep all React components, update data fetching
-- **PDF generation** - keep `pages/api/pdf/*`
-- **Resume parser** - replace JS `parse-resume-from-pdf/` with Python backend
+```
+frontend/
+├── src/
+│   ├── pages/
+│   │   ├── index.jsx              # Main dashboard (panel switcher)
+│   │   ├── _app.jsx               # ToastContainer, global providers
+│   │   └── _document.jsx          # HTML structure
+│   │
+│   ├── components/
+│   │   ├── Dashboard/
+│   │   │   ├── Sidebar.jsx        # Nav + system status indicator
+│   │   │   ├── ChatPanel.jsx      # AI chat with voice input, agent display
+│   │   │   ├── ResumePanel.jsx    # Resume list + editor with file upload
+│   │   │   ├── JobsPanel.jsx      # Job tracker with status pipeline
+│   │   │   ├── InterviewPanel.jsx # Mock interview with Hannah + voice I/O
+│   │   │   ├── AnalyticsPanel.jsx # Stats cards + score charts
+│   │   │   └── SettingsPanel.jsx  # System info, GPU status, PersonaPlex
+│   │   └── PersonaPlex/
+│   │       └── AvatarWidget.jsx   # Avatar state visualization
+│   │
+│   ├── hooks/
+│   │   ├── useApi.js              # REST client (all backend endpoints)
+│   │   ├── useWebSocket.js        # Real-time chat connection
+│   │   └── usePersonaPlex.js      # Browser Speech API fallback
+│   │
+│   └── styles/
+│       └── globals.css            # Tailwind + custom animations
+│
+├── package.json                   # Next.js 14, React 18, Tailwind, Lucide icons
+├── next.config.js                 # standalone output, API/WS URL env vars
+├── tailwind.config.js
+├── Dockerfile                     # Node 20 slim
+└── .env.example
+```
 
-### Frontend Changes Required
+### Key Frontend Dependencies
 
-1. **New API client** (`helpers/api/careerOsClient.js`):
-   - REST calls to FastAPI backend
-   - SSE streaming for real-time responses
-   - WebSocket connection for interview sessions
+```json
+{
+  "next": "^14.2.0",
+  "react": "^18.3.0",
+  "tailwindcss": "^3.4.0",
+  "lucide-react": "^0.400.0",
+  "react-toastify": "^10.0.0",
+  "react-apexcharts": "^1.4.1",
+  "apexcharts": "^4.1.0",
+  "clsx": "^2.1.0"
+}
+```
 
-2. **New dashboard page** (`pages/dashboard/pipeline.js`):
-   - Job match pipeline view
-   - Proactive notification center
-   - Application tracking
+### Communication Pattern
 
-3. **Updated interview page** (`components/mockinterview/*`):
-   - WebSocket → new FastAPI WS endpoint
-   - Add webcam frame capture (every 2s) for vision mode
-   - Add coding editor panel with Piston execution
-
-4. **Upgrade Next.js** from 13.3 to 14+ (App Router optional, can stay Pages Router)
+- **REST**: `useApi.js` → `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`)
+- **WebSocket**: `useWebSocket.js` → `NEXT_PUBLIC_WS_URL` (default `ws://localhost:8000`)
+- **Speech**: `usePersonaPlex.js` → Browser Web Speech API (fallback when Riva unavailable)
 
 ---
 
 ## 8. Infrastructure & Docker Compose
 
-```yaml
-# docker-compose.yml
+### Current State
 
-version: '3.8'
+Two standalone Dockerfiles (backend + frontend). No orchestration yet.
+
+### Target: Full NIM Stack
+
+```yaml
+# docker-compose.yml (target - implements Hybrid-Inference Mode B)
 
 services:
-  # ============================================
-  # NVIDIA NIM: LLM (Llama 3 70B Instruct)
-  # ============================================
+  # === NVIDIA NIM: LLM ===
   nim-llm:
     image: nvcr.io/nim/meta/llama-3.1-70b-instruct:latest
     environment:
@@ -551,10 +456,10 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 2  # 70B needs ~2x A100/H100
+              count: all
               capabilities: [gpu]
     ports:
-      - "8000:8000"
+      - "8010:8000"
     volumes:
       - nim-llm-cache:/opt/nim/.cache
     healthcheck:
@@ -563,9 +468,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # ============================================
-  # NVIDIA NIM: Vision (VILA / LLaVA)
-  # ============================================
+  # === NVIDIA NIM: Vision (VILA) ===
   nim-vision:
     image: nvcr.io/nim/nvidia/vila:latest
     environment:
@@ -578,13 +481,12 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "8001:8000"
+      - "8011:8000"
     volumes:
       - nim-vision-cache:/opt/nim/.cache
+    profiles: ["full"]  # Only in full deployment
 
-  # ============================================
-  # NVIDIA NIM: Embeddings (NV-Embed-v1)
-  # ============================================
+  # === NVIDIA NIM: Embeddings (NV-Embed) ===
   nim-embeddings:
     image: nvcr.io/nim/nvidia/nv-embedqa-e5-v5:latest
     environment:
@@ -597,11 +499,10 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "8002:8000"
+      - "8012:8000"
+    profiles: ["full"]
 
-  # ============================================
-  # NVIDIA Riva: Speech (STT + TTS)
-  # ============================================
+  # === NVIDIA Riva: Speech (STT + TTS) ===
   riva-speech:
     image: nvcr.io/nvidia/riva/riva-speech:2.17.0
     environment:
@@ -614,109 +515,60 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "50051:50051"   # gRPC
-      - "8003:8000"     # HTTP
+      - "50051:50051"
+      - "8013:8000"
+    profiles: ["full"]
 
-  # ============================================
-  # Qdrant: Vector Database
-  # ============================================
+  # === Qdrant: Vector Database ===
   qdrant:
     image: qdrant/qdrant:v1.12.5
     ports:
-      - "6333:6333"     # HTTP
-      - "6334:6334"     # gRPC
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant-data:/qdrant/storage
 
-  # ============================================
-  # Redis: Celery Broker + Cache
-  # ============================================
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-
-  # ============================================
-  # CareerOS Backend: FastAPI + LangGraph
-  # ============================================
-  backend:
-    build:
-      context: ./llmbackend
-      dockerfile: Dockerfile
-    environment:
-      - NIM_LLM_URL=http://nim-llm:8000/v1
-      - NIM_VISION_URL=http://nim-vision:8000/v1
-      - NIM_EMBEDDINGS_URL=http://nim-embeddings:8000/v1
-      - RIVA_URL=riva-speech:50051
-      - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379/0
-      - MONGODB_URI=${MONGODB_URI}
-      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./llmbackend:/app
-    depends_on:
-      nim-llm:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-      redis:
-        condition: service_started
-
-  # ============================================
-  # Celery Worker: Background Tasks
-  # ============================================
-  celery-worker:
-    build:
-      context: ./llmbackend
-      dockerfile: Dockerfile
-    command: celery -A src.tasks.celery_app worker -l info
-    environment:
-      - NIM_LLM_URL=http://nim-llm:8000/v1
-      - NIM_EMBEDDINGS_URL=http://nim-embeddings:8000/v1
-      - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379/0
-      - MONGODB_URI=${MONGODB_URI}
-    depends_on:
-      - backend
-      - redis
-
-  # ============================================
-  # Celery Beat: Scheduler (Market Watcher)
-  # ============================================
-  celery-beat:
-    build:
-      context: ./llmbackend
-      dockerfile: Dockerfile
-    command: celery -A src.tasks.celery_app beat -l info
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - redis
-
-  # ============================================
-  # Piston: Code Execution Sandbox
-  # ============================================
+  # === Piston: Code Execution Sandbox ===
   piston:
     image: ghcr.io/engineer-man/piston:latest
     ports:
       - "2000:2000"
     tmpfs:
       - /piston/jobs
+    profiles: ["full"]
 
-  # ============================================
-  # Frontend: Next.js
-  # ============================================
-  frontend:
+  # === CareerOS Backend ===
+  backend:
     build:
-      context: ./llmfrontend
+      context: ./backend
       dockerfile: Dockerfile
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8080
-      - NEXT_PUBLIC_WS_URL=ws://backend:8080
+      - NIM_API_BASE=http://nim-llm:8000/v1
+      - NIM_MODEL=meta/llama-3.1-70b-instruct
+      - RIVA_SPEECH_URL=riva-speech:50051
+      - PERSONAPLEX_URL=http://nim-vision:8000
+      - QDRANT_URL=http://qdrant:6333
+      - DATABASE_URL=sqlite:///./data/careeros.db
+      - FRONTEND_URL=http://frontend:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend-data:/app/data
+      - backend-models:/app/models
+    depends_on:
+      nim-llm:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+
+  # === CareerOS Frontend ===
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
@@ -726,323 +578,208 @@ volumes:
   nim-llm-cache:
   nim-vision-cache:
   qdrant-data:
-  redis-data:
+  backend-data:
+  backend-models:
 ```
 
-### Environment Variables (`.env`)
+### Deployment Profiles
 
 ```bash
-# NVIDIA
-NGC_API_KEY=your-ngc-api-key
+# Mode A: Mac / no GPU (backend + frontend + qdrant only)
+docker compose up backend frontend qdrant
 
-# MongoDB (existing)
-MONGODB_URI=mongodb+srv://...
-TLS_CERTIFICATE_KEY_FILE=./certs/cert.pem
-
-# Firebase (existing)
-FIREBASE_CREDENTIALS=./certs/firebase-sa.json
-
-# Stripe (existing)
-STRIPE_SECRET_KEY=sk_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-
-# Notifications
-SENDGRID_API_KEY=SG...
-SLACK_WEBHOOK_URL=https://hooks.slack.com/...
-
-# LangSmith (optional monitoring)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=ls_...
-LANGCHAIN_PROJECT=careeros
-
-# Market Watcher
-WATCHER_INTERVAL_HOURS=6
-WATCHER_MATCH_THRESHOLD=0.85
+# Mode B: NVIDIA GPU (full NIM stack)
+docker compose --profile full up
 ```
 
 ---
 
-## 9. Data Migration
+## 9. Feature Specifications
 
-### MongoDB Schema Changes
+### Feature 1: The "Proactive" Cron-Agent (Market Watcher)
 
-**Existing collections** (keep as-is):
-- `users` - Firebase user profiles
-- `resumes` - Resume data
-- `jobDescription` - Extracted JD data
-- `mockInterviewChatLog` - Interview logs
+**Concept**: The app doesn't wait. It runs a background task on a configurable schedule.
 
-**New collections**:
+**Workflow**:
+1. **Wake Up**: Triggered by APScheduler timer (default: every 6 hours)
+2. **Market Scan**: Fetches career pages from target companies
+3. **Embed & Match**: Embeds JDs with NV-Embed-v1, compares against user resume in Qdrant
+4. **Gap Analysis**: Uses LLM to identify missing skills for high-match jobs
+5. **Notification**: In-app notification on the dashboard: "Found a Senior Role at NVIDIA. You are missing 'TensorRT' experience."
 
-```javascript
-// job_matches - Proactive job matching results
-{
-  userId: string,
-  jobUrl: string,
-  jobTitle: string,
-  company: string,
-  matchScore: float,           // 0.0 - 1.0
-  gapAnalysis: {
-    missingSkills: string[],
-    recommendations: string[],
-  },
-  applicationStatus: string,   // "matched" | "approved" | "applied" | "rejected"
-  scrapedAt: Date,
-  appliedAt: Date | null,
-  embedding_id: string,        // Reference to Qdrant vector
-}
+**JD Alignment**: Demonstrates "Action driven with strong analytical skills"
 
-// agent_sessions - LangGraph session state
-{
-  userId: string,
-  sessionId: string,
-  graphType: string,           // "career" | "interview" | "resume" | "watcher"
-  checkpoint: object,          // LangGraph checkpoint data
-  createdAt: Date,
-  lastActiveAt: Date,
-}
+### Feature 2: The "Hannah" Mock Interviewer (Multimodal)
 
-// interview_sessions - Enhanced interview tracking
-{
-  userId: string,
-  sessionId: string,
-  jobDescriptionId: string,
-  mode: string,                // "text" | "voice" | "video" | "coding"
-  roleType: string,            // "software" | "industrial" | "behavioral"
-  questions: [{
-    question: string,
-    userAnswer: string,
-    feedback: string,
-    score: float,
-    timestamp: Date,
-  }],
-  overallScore: float,
-  codeSubmissions: [{
-    code: string,
-    language: string,
-    output: string,
-    passed: boolean,
-  }],
-  visionFrames: string[],     // S3/R2 paths to captured frames
-}
+**Voice Mode** (Software Engineering):
+1. User speaks to microphone
+2. NVIDIA Riva transcribes audio to text (STT)
+3. LLM generates follow-up question based on user's resume + JD
+4. NVIDIA Riva converts response to speech (TTS)
+5. Fallback: Browser Web Speech API when Riva unavailable
 
-// notification_preferences
-{
-  userId: string,
-  channels: string[],          // ["email", "slack", "in_app"]
-  watcherEnabled: boolean,
-  watcherIntervalHours: number,
-  targetRoles: string[],
-  targetCompanies: string[],
-  matchThreshold: float,
-}
-```
+**Vision Mode** (Industrial Engineering):
+1. User holds up object to webcam
+2. Agent captures frame, sends to VILA NIM
+3. Agent: "I see you are holding a planetary gear set. Explain how you calculate the gear ratio."
 
-### Qdrant Collections
+**Coding Mode** (Software Engineering):
+1. Agent generates a coding problem from JD requirements
+2. User writes code in Monaco Editor
+3. Code executes in Piston Docker container
+4. Agent evaluates correctness, time complexity O(n), and memory usage
 
-```python
-# user_profiles - User resume embeddings
-# Dimension: 1024 (NV-Embed-v1)
-# Fields: userId, resumeId, section, text
+**JD Alignment**: Shows "Experience working with upstream open source projects" (LangChain multimodal)
 
-# job_descriptions - Scraped JD embeddings
-# Dimension: 1024
-# Fields: jobUrl, title, company, scrapedAt, rawText
-```
+### Feature 3: The "Skill-Check" Sandbox
+
+**Concept**: If user claims "Python Expert" on their resume, the agent challenges them.
+
+**Workflow**:
+1. Agent reads resume skills list
+2. Generates a targeted coding problem for the claimed skill
+3. User writes code in the React UI (Monaco Editor)
+4. Code is sent to Piston Docker container for safe execution
+5. Agent provides feedback: correctness, complexity analysis, improvement suggestions
 
 ---
 
-## 10. Implementation Phases
+## 10. Implementation Roadmap (6-Week Sprints)
 
-### Phase 1: Infrastructure Foundation
+### Phase 1: Core & Connectivity (Week 1-2) — ~80% COMPLETE
 
-**Goal**: Docker stack running with NIM endpoints accessible.
+**Goal**: Hybrid-Inference switch working, basic agent conversation functional.
 
-- [ ] Set up `docker-compose.yml` with all services
-- [ ] Verify NVIDIA Container Toolkit on DGX/server
-- [ ] Pull and test NIM containers (LLM, Vision, Embeddings)
-- [ ] Deploy Qdrant, Redis, Piston
-- [ ] Create new FastAPI project structure
-- [ ] Set up `langchain-nvidia-ai-endpoints` integration
-- [ ] Verify ChatNVIDIA + NVIDIAEmbeddings work against local NIMs
-- [ ] Basic health check endpoints
+- [x] FastAPI project structure with lifespan, CORS, routing
+- [x] GPU auto-detection (`nvidia-smi` → DGX Spark / NVIDIA / Apple / CPU)
+- [x] LLM fallback chain: NIM → llama.cpp → OpenAI API
+- [x] `langchain-nvidia-ai-endpoints` integration (`ChatNVIDIA`)
+- [x] SQLite database with 6 tables (Resume, Job, Interview, Chat, CoverLetter, Settings)
+- [x] Pydantic schemas for all API endpoints
+- [x] LangGraph supervisor with 5 agent nodes
+- [x] 7 database CRUD tools bound to agents
+- [x] WebSocket + REST chat endpoints
+- [x] Resume CRUD + PDF/DOCX file upload with text extraction
+- [x] Job tracking with status pipeline + stats
+- [x] Interview session management + stats
+- [x] PersonaPlex service health checks + Riva stubs
+- [x] Next.js 14 dashboard with 6 panels
+- [x] REST API client hook + WebSocket hook + Browser Speech hook
+- [x] AvatarWidget with state visualization
+- [x] Dockerfiles for backend + frontend
+- [ ] **docker-compose.yml with NIM + Qdrant** ← NEXT
+- [ ] Verify NIM containers pull and start on DGX/GPU hardware
+- [ ] Verify Riva containers work for STT/TTS
 
-**Deliverable**: `docker compose up` brings up full stack, `/health` returns OK.
+**Deliverable**: `docker compose up` brings up full stack, `/health` returns OK, `/api/status` shows GPU info.
 
-### Phase 2: Core Agent System
+### Phase 2: Agent Intelligence (Week 3-4) — ~20% COMPLETE
 
-**Goal**: Supervisor + Resume Analyst agents working end-to-end.
+**Goal**: Agents do real AI work, not just wrapper LLM calls.
 
-- [ ] Implement `CareerState` and LangGraph state management
-- [ ] Build Supervisor agent with intent classification
-- [ ] Port resume rewrite logic from JS to Python agents:
-  - Experience rewrite (replaces `helpers/langChain/prompts/myResume/resume.js`)
-  - Overview rewrite (replaces `pages/api/rewriteOverview.js`)
-  - Skills analysis (replaces `resumeAiTargetSkillsModel`)
-  - ATS scoring (new feature)
-- [ ] Port JD extraction (replaces `pages/api/jdInfoExtractLangChainStreaming.js`)
-- [ ] Port cover letter generation (replaces `helpers/langChain/functions/coverLetter.js`)
-- [ ] Implement FastAPI REST endpoints with SSE streaming
-- [ ] Update frontend `helperApis/` to call new backend
-- [ ] MongoDB schema migration for new collections
+- [x] Basic LLM routing (intent classification)
+- [x] System prompts for each agent persona
+- [ ] **AI-powered resume parsing** (structured extraction from raw text)
+- [ ] **JD skill extraction** (structured output with required/preferred skills)
+- [ ] **Skill gap analysis** (resume vs JD comparison with scoring)
+- [ ] **Resume optimization** (rewrite bullets to match JD keywords)
+- [ ] **ATS scoring** (keyword match percentage)
+- [ ] **Interview question generation** (role-specific from JD)
+- [ ] **Answer evaluation** (score + feedback with STAR framework check)
+- [ ] **SSE streaming** for real-time response display
+- [ ] Cover letter generation tool
+- [ ] LinkedIn message generation tool
 
-**Deliverable**: Resume rewrite, JD extraction, cover letter work via new Python backend.
+**Deliverable**: Upload resume + paste JD → get tailored resume + skill gap report + interview questions.
 
-### Phase 3: Market Watcher (Proactive Intelligence)
+### Phase 3: NIM Services & Vector Search (Week 4-5) — NOT STARTED
 
-**Goal**: System proactively finds jobs and notifies users.
+**Goal**: Full NVIDIA ecosystem integration.
 
-- [ ] Implement Playwright-based job scraper tool
-- [ ] Build embedding pipeline with NV-Embed-v1
-- [ ] Implement semantic matching against user profile
-- [ ] Build gap analysis agent node
-- [ ] Set up Celery + Redis periodic tasks
-- [ ] Build notification system (email, Slack, in-app)
-- [ ] Create frontend notification center / pipeline dashboard
-- [ ] Add user preference management (target roles, companies, threshold)
+- [ ] Qdrant vector store setup + NV-Embed-v1 integration
+- [ ] Resume embedding pipeline (on upload/update)
+- [ ] JD embedding pipeline (on save)
+- [ ] Semantic resume↔JD matching
+- [ ] Riva STT integration (real audio → text streaming)
+- [ ] Riva TTS integration (real text → audio streaming)
+- [ ] Frontend audio streaming (WebSocket binary frames)
+- [ ] VILA vision integration for industrial interview mode
+- [ ] Frontend webcam frame capture
 
-**Deliverable**: System runs every N hours, finds matching jobs, sends notifications.
+**Deliverable**: Voice-powered mock interview with semantic job matching.
 
-### Phase 4: Interview Coach (Multimodal)
+### Phase 4: Proactive Agent & Sandbox (Week 5-6) — NOT STARTED
 
-**Goal**: Full multimodal interview coaching system.
+**Goal**: System works autonomously; coding interviews functional.
 
-- [ ] Rewrite mock interview from AutoGen GroupChat to LangGraph
-- [ ] Implement software engineering mode:
-  - Coding challenge generation
-  - Piston code execution integration
-  - Complexity analysis + refactoring tips
-- [ ] Implement industrial/hardware mode:
-  - Camera frame capture (React Webcam on frontend)
-  - VILA NIM vision analysis
-  - Visual-contextual question generation
-- [ ] Implement voice mode:
-  - Riva STT integration
-  - Riva TTS integration
-  - Real-time streaming pipeline
-- [ ] Implement behavioral interview mode
-- [ ] Build interview scoring and feedback system
-- [ ] Update frontend interview UI components
+- [ ] APScheduler background task runner
+- [ ] Market Watcher scraping pipeline
+- [ ] Notification system (in-app dashboard)
+- [ ] Piston code execution integration
+- [ ] Monaco Editor in frontend
+- [ ] Coding interview mode with execution + evaluation
+- [ ] Application tracking board (Kanban-style)
 
-**Deliverable**: Multi-mode interview coaching with voice, video, coding support.
+**Deliverable**: System proactively finds jobs; coding interviews execute real code.
 
-### Phase 5: Application Bot (Autonomous Apply)
+### Phase 5: Polish & OSS Contribution (Week 6+)
 
-**Goal**: Agent can auto-fill and submit job applications.
+- [ ] LangSmith agent tracing integration
+- [ ] Error handling and graceful fallbacks everywhere
+- [ ] Frontend responsive polish
+- [ ] **Find and fix a bug in `langchain-nvidia-ai-endpoints`** → submit PR
+- [ ] Documentation and README for portfolio
+- [ ] Demo video for NVIDIA application
 
-- [ ] Implement browser automation agent (Playwright / browser-use)
-- [ ] Build application form field detection
-- [ ] Implement document upload automation
-- [ ] Add human-in-the-loop confirmation before submission
-- [ ] Build application tracking dashboard
-- [ ] Add status monitoring and retry logic
-
-**Deliverable**: User approves a job match, agent applies on their behalf.
-
-### Phase 6: Polish & Production
-
-**Goal**: Production-ready system.
-
-- [ ] LangSmith integration for agent tracing
-- [ ] Comprehensive error handling and fallbacks
-- [ ] Rate limiting and resource management
-- [ ] Load testing with multiple concurrent users
-- [ ] Security audit (auth, data isolation, sandboxing)
-- [ ] Frontend polish (responsive, accessibility)
-- [ ] Documentation and admin tools
-- [ ] Remove legacy Azure OpenAI / AutoGen code
-
-**Deliverable**: Production-ready CareerOS deployment.
+**Deliverable**: Production-quality portfolio piece + open-source contribution.
 
 ---
 
-## 11. File-by-File Migration Map
+## 11. Hardware Requirements
 
-### Backend Files to Replace
-
-| Current File | Replaced By | Notes |
-|-------------|------------|-------|
-| `llmbackend/src/main.py` | `src/main.py` (new FastAPI) | Complete rewrite |
-| `llmbackend/src/autogen_group_chat.py` | `src/agents/interview_coach.py` + `src/graphs/interview_graph.py` | AutoGen → LangGraph |
-| `llmbackend/src/user_proxy_webagent.py` | `src/api/ws.py` (WebSocket manager) | AutoGen proxy → FastAPI WS |
-| `llmbackend/src/groupchatweb.py` | `src/graphs/career_graph.py` | AutoGen GroupChat → LangGraph |
-
-### Frontend AI Files to Replace
-
-| Current File | Replaced By | Notes |
-|-------------|------------|-------|
-| `helpers/langChain/prompts/myResume/resume.js` | Backend `src/agents/resume_analyst.py` | Prompts move to Python |
-| `helpers/langChain/prompts/myResumeEdit/experience.js` | Backend `src/agents/resume_analyst.py` | |
-| `helpers/langChain/prompts/myResumeEdit/overviewSummary.js` | Backend `src/agents/resume_analyst.py` | |
-| `helpers/langChain/prompts/coverLetter.js` | Backend `src/agents/cover_letter.py` | |
-| `helpers/langChain/prompts/interviewQuestions/*` | Backend `src/agents/interview_coach.py` | |
-| `helpers/langChain/prompts/mockInterview/*` | Backend `src/agents/interview_coach.py` | |
-| `helpers/langChain/prompts/jobSearch/*` | Backend `src/agents/market_watcher.py` | |
-| `helpers/langChain/prompts/linkedinMessage/*` | Backend `src/agents/cover_letter.py` | Generalized |
-| `helpers/langChain/functions/myResume/resume.js` | Backend `src/models/resume.py` (Pydantic) | Zod → Pydantic |
-| `helpers/langChain/functions/coverLetter.js` | Backend `src/models/resume.py` | |
-| `helpers/llmAgents/interviewAgent.js` | Backend `src/graphs/interview_graph.py` | JS LangGraph → Python LangGraph |
-| `helpers/openAI/openai.js` | Backend `src/llm/nvidia_nim.py` | OpenAI → ChatNVIDIA |
-| `pages/api/rewriteOverview.js` | Backend `POST /api/v1/resume/rewrite-overview` | Direct Azure call → Agent |
-| `pages/api/jdInfoExtractLangChainStreaming.js` | Backend `POST /api/v1/jobs/extract-jd` | |
-| `pages/api/streaming/myResume/experienceRewrite.js` | Backend `POST /api/v1/resume/rewrite-experience` | |
-| `pages/api/searchJdExtractor.js` | Backend `POST /api/v1/jobs/search` | |
-
-### Frontend Files to Keep (Update API calls only)
-
-| File | Change Required |
-|------|----------------|
-| `helpers/helperApis/rewriteMyResume.js` | Point to new backend URL |
-| `helpers/helperApis/generateCoverLetter.js` | Point to new backend URL |
-| `helpers/helperApis/jdInfoExtract.js` | Point to new backend URL |
-| `helpers/helperApis/generateInterviewQuestions.js` | Point to new backend URL |
-| `helpers/helperApis/professionalExperienceRewrite.js` | Point to new backend URL |
-| `helpers/helperApis/searchResumes.js` | Point to new backend URL |
-| All `components/*` | Minor prop changes, same structure |
-| `helpers/firebase/*` | No changes |
-| `helpers/mongodb/*` | Keep for non-AI operations |
-| `pages/api/stripe/*` | No changes |
-| `pages/api/mail/*` | No changes |
-| `pages/api/pdf/*` | No changes |
-
-### New Frontend Files
-
-| New File | Purpose |
-|----------|---------|
-| `helpers/api/careerOsClient.js` | Central API client for FastAPI backend |
-| `helpers/api/streamingClient.js` | SSE + WebSocket streaming utilities |
-| `pages/dashboard/pipeline.js` | Job match pipeline dashboard |
-| `pages/dashboard/notifications.js` | Proactive notification center |
-| `pages/dashboard/applications.js` | Application tracking view |
-| `components/interview/CodingEditor.jsx` | Code editor for coding interviews |
-| `components/interview/VisionCapture.jsx` | Webcam frame capture for vision mode |
-| `components/interview/VoiceControls.jsx` | Voice interview controls (Riva) |
-| `components/dashboard/MatchCard.jsx` | Job match card with gap analysis |
-| `components/dashboard/PipelineBoard.jsx` | Kanban-style application tracker |
+| User Type | Hardware | Inference Mode | Capabilities |
+|-----------|----------|---------------|--------------|
+| **Student** | Mac M2/M3/M4 (16GB RAM) | NIM Cloud API or local llama.cpp | Full features via API. Low power. Browser speech. |
+| **Pro** | Windows/Linux + RTX 4090 | Local NIM (1 model) | Llama-3-8B locally. Vision/Speech via API. |
+| **Enterprise** | NVIDIA DGX Spark / A100 | Local NIM Swarm | Everything runs offline. Maximum privacy. Full PersonaPlex. |
 
 ---
 
-## 12. Risk Analysis & Mitigations
+## 12. NVIDIA Job Alignment Map
+
+| JD Requirement | CareerOS Feature | Evidence |
+|---------------|-----------------|---------|
+| "Deep understanding of NVIDIA NIM ecosystem" | Hybrid-Inference architecture, auto-detection, ChatNVIDIA/NVIDIAEmbeddings | `gpu_detect.py`, `llm_provider.py`, `config.py` |
+| "Developer workflows" | Mode A/B switching, docker-compose profiles | Entire architecture |
+| "Experience with upstream open source projects" | LangChain multimodal integration, potential PR to `langchain-nvidia-ai-endpoints` | Phase 5 goal |
+| "Day-0 support for new models" | Model-agnostic config, easy to swap NIM images | `config.py` NIM_MODEL setting |
+| "Action driven with strong analytical skills" | Proactive Market Watcher agent | Phase 4 |
+| "Complex agent logic, not just API calls" | LangGraph supervisor with cyclic routing, tool execution, state management | `orchestrator.py` |
+
+---
+
+## 13. Risk Analysis & Mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| **NIM model quality < GPT-4o** | Lower resume/interview quality | Benchmark Llama 3 70B vs GPT-4o on resume tasks; keep Azure as fallback |
-| **GPU memory constraints** | Can't run all NIMs simultaneously | Profile GPU usage; use model scheduling or smaller models (8B) for low-priority tasks |
-| **LangGraph complexity** | Agent loops, deadlocks | Extensive unit tests per node; recursion limits; LangSmith tracing |
-| **Job scraping blocked** | LinkedIn/Indeed anti-bot | Rotate proxies; use official APIs where available; respect robots.txt |
-| **Browser automation fragile** | Application forms vary wildly | Human-in-the-loop confirmation; graceful fallback to manual |
-| **Riva model availability** | Language/accent coverage | Start with English; test accent robustness; fallback to Whisper |
-| **Migration downtime** | Users lose access | Phase migration; run old + new in parallel; feature flags |
-| **Data isolation** | Multi-user security | Strict userId filtering in all queries; Qdrant payload filtering |
+| **NIM model quality < GPT-4o** | Lower resume/interview quality | Benchmark on resume tasks; keep OpenAI as fallback; use larger models on DGX |
+| **GPU memory constraints** | Can't run all NIMs simultaneously | Docker compose profiles (`full` vs default); model scheduling; 8B for low-priority |
+| **LangGraph complexity** | Agent loops, deadlocks | Recursion limits set; LangSmith tracing; unit tests per node |
+| **Riva availability** | Language/accent coverage | Browser Web Speech API as automatic fallback (already implemented) |
+| **Piston sandbox security** | Code execution risks | tmpfs mount, no network access, timeout limits |
+| **llama.cpp on Mac** | Slow for large models | Use 3B model for routing, 8B for generation; recommend API fallback for Mac |
 
 ---
 
 ## Summary
 
-This plan transforms ResumeGuru.IO from a **reactive, cloud-dependent** tool into **CareerOS**: a **proactive, local-first, multimodal AI career agent**. The migration is structured in 6 phases, with each phase delivering standalone value. The core architectural shift is:
+CareerOS is a **proactive, local-first, multimodal AI career agent** that demonstrates mastery of the NVIDIA NIM ecosystem. The architecture:
 
-1. **AI Backend**: JS LangChain API routes + Python AutoGen → Unified Python FastAPI + LangGraph
-2. **LLM Provider**: Azure OpenAI (cloud) → NVIDIA NIM (local)
-3. **Agent Model**: Request-response chains → Stateful, cyclic, supervisor-routed agents
-4. **Capabilities**: Text-only → Multimodal (vision, voice, code execution)
-5. **Behavior**: Reactive → Proactive (Market Watcher + notifications)
+1. **Automatically adapts** to hardware (DGX Spark → NVIDIA GPU → Apple Silicon → CPU)
+2. **Uses LangGraph** for stateful, cyclic agent workflows with supervisor routing
+3. **Integrates NVIDIA NIM** for LLM, Vision, Embeddings, and Speech services
+4. **Runs locally** — all data stays on the user's machine (SQLite + local files)
+5. **Acts proactively** — Market Watcher finds jobs and identifies skill gaps
+6. **Coaches multimodally** — voice (Riva), vision (VILA), code execution (Piston)
+
+Each feature is designed not just to be useful, but to create **demonstrable evidence** of NVIDIA ecosystem expertise for the job application.

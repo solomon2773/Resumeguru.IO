@@ -21,6 +21,9 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from .tools import resume_tools, job_tools, interview_tools, all_tools
+from .resume_tools import resume_ai_tools
+from .job_tools import job_ai_tools
+from .interview_tools import interview_ai_tools
 from ..services.llm_provider import get_llm
 
 logger = logging.getLogger(__name__)
@@ -102,9 +105,11 @@ def create_agent_graph() -> StateGraph:
     llm = get_llm()
 
     # Bind tools to LLM for agents that need them
-    resume_llm = llm.bind_tools(resume_tools)
-    interview_llm = llm.bind_tools(interview_tools)
-    job_llm = llm.bind_tools(job_tools)
+    # Each agent gets both CRUD tools and AI-powered tools
+    resume_llm = llm.bind_tools(resume_tools + resume_ai_tools)
+    interview_llm = llm.bind_tools(interview_tools + interview_ai_tools)
+    job_llm = llm.bind_tools(job_tools + job_ai_tools)
+    feedback_llm = llm.bind_tools(interview_ai_tools)
 
     def router(state: AgentState) -> AgentState:
         """Route the message to the appropriate agent."""
@@ -150,7 +155,7 @@ def create_agent_graph() -> StateGraph:
 
     def feedback_agent(state: AgentState) -> AgentState:
         messages = [SystemMessage(content=FEEDBACK_SYSTEM)] + state["messages"]
-        response = llm.invoke(messages)
+        response = feedback_llm.invoke(messages)
         return {**state, "messages": [response]}
 
     def job_agent(state: AgentState) -> AgentState:
@@ -174,8 +179,9 @@ def create_agent_graph() -> StateGraph:
             return "tools"
         return END
 
-    # Build the graph
-    tool_node = ToolNode(all_tools)
+    # Build the graph — combine CRUD tools with AI tools
+    all_combined_tools = all_tools + resume_ai_tools + job_ai_tools + interview_ai_tools
+    tool_node = ToolNode(all_combined_tools)
 
     graph = StateGraph(AgentState)
 

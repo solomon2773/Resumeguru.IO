@@ -27,6 +27,47 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ content, session_id: sessionId }),
     }),
+  /**
+   * Stream a chat response via SSE. Calls onToken for each chunk, onDone when complete.
+   * Returns an abort controller to cancel the stream.
+   */
+  streamMessage: (content, sessionId = "general", { onToken, onAgent, onDone, onError } = {}) => {
+    const controller = new AbortController();
+    fetch(`${API_URL}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, session_id: sessionId }),
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Stream request failed");
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "token" && onToken) onToken(data.content);
+              else if (data.type === "agent" && onAgent) onAgent(data.agent);
+              else if (data.type === "done" && onDone) onDone(data);
+              else if (data.type === "error" && onError) onError(data.content);
+            } catch {}
+          }
+        }
+        if (onDone) onDone({});
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError" && onError) onError(err.message);
+      });
+    return controller;
+  },
   getChatHistory: (sessionId) => request(`/api/chat/history/${sessionId}`),
   clearChat: (sessionId) =>
     request(`/api/chat/history/${sessionId}`, { method: "DELETE" }),

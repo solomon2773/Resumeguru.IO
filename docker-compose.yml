@@ -1,24 +1,27 @@
 ###############################################################################
-# CareerOS - Docker Compose
+# CareerOS - Docker Compose (Hybrid-Inference Architecture)
 #
-# Auto-starts both frontend and backend.
-# Single user, local SQLite database, no external services required.
+# Three deployment modes:
 #
-# Usage:
-#   docker compose up          # start both services
-#   docker compose up --build  # rebuild and start
-#   docker compose down        # stop
+#   Mode A - Mac / no GPU (default):
+#     docker compose up
+#     → backend + frontend + qdrant
+#     → LLM via llama.cpp (local model) or OpenAI API fallback
 #
-# GPU support:
-#   For NVIDIA GPU (DGX Spark / consumer):
-#     docker compose --profile gpu up
+#   Mode B - NVIDIA GPU (full NIM stack):
+#     docker compose --profile nim up
+#     → All of Mode A + NIM LLM + NIM Vision + NIM Embeddings + Riva Speech + Piston
+#     → Full local inference, maximum privacy
 #
-#   For CPU/Apple Silicon:
-#     docker compose up  (default, no GPU passthrough)
+#   Dev mode - backend + frontend only:
+#     docker compose up backend frontend
+#
+# Prerequisites:
+#   Mode B only: NGC_API_KEY in .env, NVIDIA Container Toolkit installed
 ###############################################################################
 
 services:
-  # ── Backend (FastAPI + LangGraph + PersonaPlex) ───────────────────────────
+  # ── CareerOS Backend (FastAPI + LangGraph + PersonaPlex) ────────────────
   backend:
     build:
       context: ./backend
@@ -30,27 +33,31 @@ services:
       - DEBUG=${DEBUG:-false}
       - FRONTEND_URL=http://localhost:3000
       - DATABASE_URL=sqlite:///./data/careeros.db
-      - NIM_API_BASE=${NIM_API_BASE:-http://localhost:8010}
+      # NIM - auto-detected at startup, these are defaults for Mode B
+      - NIM_API_BASE=${NIM_API_BASE:-http://nim-llm:8000/v1}
       - NIM_MODEL=${NIM_MODEL:-meta/llama-3.1-70b-instruct}
-      - NIM_API_KEY=${NIM_API_KEY:-}
-      - PERSONAPLEX_URL=${PERSONAPLEX_URL:-http://localhost:8020}
-      - RIVA_SPEECH_URL=${RIVA_SPEECH_URL:-localhost:50051}
+      - NIM_API_KEY=${NIM_API_KEY:-not-needed-for-local}
+      # PersonaPlex / Riva
+      - PERSONAPLEX_URL=${PERSONAPLEX_URL:-http://nim-vision:8000}
+      - RIVA_SPEECH_URL=${RIVA_SPEECH_URL:-riva-speech:50051}
+      # Local model fallback (Mode A)
       - LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-./models/llama-3.2-3b-instruct.Q4_K_M.gguf}
+      # External API fallback
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_BASE=${OPENAI_API_BASE:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
     volumes:
       - careeros-data:/app/data
-      - ./models:/app/models:ro  # Mount local models directory
+      - ./models:/app/models:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 15s
     restart: unless-stopped
 
-  # ── Frontend (Next.js Dashboard) ─────────────────────────────────────────
+  # ── CareerOS Frontend (Next.js Dashboard) ───────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -66,29 +73,29 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── GPU-enabled backend (optional, use with --profile gpu) ───────────────
-  backend-gpu:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: careeros-backend-gpu
-    profiles: ["gpu"]
+  # ── Qdrant: Vector Database ─────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.12.5
+    container_name: careeros-qdrant
     ports:
-      - "8000:8000"
-    environment:
-      - DEBUG=${DEBUG:-false}
-      - FRONTEND_URL=http://localhost:3000
-      - DATABASE_URL=sqlite:///./data/careeros.db
-      - NIM_API_BASE=${NIM_API_BASE:-http://localhost:8010}
-      - NIM_MODEL=${NIM_MODEL:-meta/llama-3.1-70b-instruct}
-      - NIM_API_KEY=${NIM_API_KEY:-}
-      - PERSONAPLEX_URL=${PERSONAPLEX_URL:-http://localhost:8020}
-      - RIVA_SPEECH_URL=${RIVA_SPEECH_URL:-localhost:50051}
-      - LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-./models/llama-3.2-3b-instruct.Q4_K_M.gguf}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - "6333:6333"
+      - "6334:6334"
     volumes:
-      - careeros-data:/app/data
-      - ./models:/app/models:ro
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
+  # ════════════════════════════════════════════════════════════════════════
+  # NVIDIA NIM Services (Mode B only - use with: --profile nim)
+  # ════════════════════════════════════════════════════════════════════════
+
+  # ── NVIDIA NIM: LLM (Llama 3.1 70B Instruct) ──────────────────────────
+  nim-llm:
+    image: nvcr.io/nim/meta/llama-3.1-70b-instruct:latest
+    container_name: careeros-nim-llm
+    profiles: ["nim"]
+    environment:
+      - NGC_API_KEY=${NGC_API_KEY}
+      - NIM_MAX_MODEL_LEN=8192
     deploy:
       resources:
         reservations:
@@ -96,14 +103,91 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    ports:
+      - "8010:8000"
+    volumes:
+      - nim-llm-cache:/opt/nim/.cache
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ── NVIDIA NIM: Vision (VILA) ───────────────────────────────────────────
+  nim-vision:
+    image: nvcr.io/nim/nvidia/vila:latest
+    container_name: careeros-nim-vision
+    profiles: ["nim"]
+    environment:
+      - NGC_API_KEY=${NGC_API_KEY}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "8011:8000"
+    volumes:
+      - nim-vision-cache:/opt/nim/.cache
+    restart: unless-stopped
+
+  # ── NVIDIA NIM: Embeddings (NV-Embed) ──────────────────────────────────
+  nim-embeddings:
+    image: nvcr.io/nim/nvidia/nv-embedqa-e5-v5:latest
+    container_name: careeros-nim-embeddings
+    profiles: ["nim"]
+    environment:
+      - NGC_API_KEY=${NGC_API_KEY}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "8012:8000"
+    restart: unless-stopped
+
+  # ── NVIDIA Riva: Speech (STT + TTS) ────────────────────────────────────
+  riva-speech:
+    image: nvcr.io/nvidia/riva/riva-speech:2.17.0
+    container_name: careeros-riva-speech
+    profiles: ["nim"]
+    environment:
+      - NGC_API_KEY=${NGC_API_KEY}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "50051:50051"
+      - "8013:8000"
+    restart: unless-stopped
+
+  # ── Piston: Code Execution Sandbox ──────────────────────────────────────
+  piston:
+    image: ghcr.io/engineer-man/piston:latest
+    container_name: careeros-piston
+    profiles: ["nim"]
+    ports:
+      - "2000:2000"
+    tmpfs:
+      - /piston/jobs
     restart: unless-stopped
 
 volumes:
   careeros-data:
+    driver: local
+  qdrant-data:
+    driver: local
+  nim-llm-cache:
+    driver: local
+  nim-vision-cache:
     driver: local
